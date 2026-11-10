@@ -7,7 +7,10 @@ import { EmptyState } from "@/client/components/EmptyState";
 import { PermissionHint } from "@/client/components/PermissionHint";
 import { Alert, AlertDescription } from "@/client/components/ui/alert";
 import { Button } from "@/client/components/ui/button";
-import { formatDay } from "@/client/features/gsc-tracker/gscTrackerView";
+import {
+  formatDay,
+  shiftDay,
+} from "@/client/features/gsc-tracker/gscTrackerView";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import {
@@ -242,5 +245,41 @@ function TrackerSettings({
         </p>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Says when the chosen period reaches past the stored history, so a longer
+ * period showing the same numbers doesn't read as a broken filter.
+ */
+export function HistoryNotice({
+  oldestDate,
+  newestDate,
+  progress,
+  days,
+}: {
+  oldestDate: string | null;
+  newestDate: string;
+  progress: number;
+  days: number;
+}) {
+  if (!oldestDate) return null;
+  const currentStart = shiftDay(newestDate, -(days - 1));
+  const previousStart = shiftDay(currentStart, -days);
+  if (previousStart >= oldestDate) return null;
+  const stored = `${formatDay(oldestDate)} – ${formatDay(newestDate)}`;
+  const loading =
+    progress < 1
+      ? ` Older days keep loading (${Math.round(progress * 100)}% of 16 months so far).`
+      : "";
+  return (
+    <Alert variant="info">
+      <AlertDescription>
+        {currentStart < oldestDate
+          ? `Only ${stored} is stored so far, so this period shows those days and has no previous period to compare with. Longer periods show the same numbers until older days arrive.`
+          : `The previous period is only partly stored (history starts ${formatDay(oldestDate)}), so the changes are incomplete.`}
+        {loading}
+      </AlertDescription>
+    </Alert>
   );
 }
