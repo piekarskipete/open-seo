@@ -4,6 +4,7 @@ import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import { Input } from "@/client/components/ui/input";
 import { Skeleton } from "@/client/components/ui/skeleton";
+import { Spinner } from "@/client/components/ui/spinner";
 import { CompareTable } from "@/client/features/gsc-tracker/GscTrackerCompareTable";
 import {
   applyListFilter,
@@ -62,46 +63,53 @@ export function ExplorerTab({
     placeholderData: keepPreviousData,
   });
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Filter queries"
-            aria-label="Filter queries"
-            className="max-w-xs"
-          />
-          <Input
-            value={page}
-            onChange={(event) => setPage(event.target.value)}
-            placeholder="Filter by URL, e.g. /running-shoes/"
-            aria-label="Filter by URL"
-            className="max-w-sm"
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Filter queries"
+          aria-label="Filter queries"
+          className="h-8 max-w-xs"
+        />
+        <Input
+          value={page}
+          onChange={(event) => setPage(event.target.value)}
+          placeholder="Filter by URL, e.g. /running-shoes/"
+          aria-label="Filter by URL"
+          className="h-8 max-w-sm"
+        />
+        {list.isFetching && !list.isPending ? (
+          <Spinner className="size-4 text-muted-foreground" />
+        ) : null}
+        <div className="ml-auto">
+          <SegmentedToggle
+            showLabels
+            value={filter}
+            onChange={setFilter}
+            items={LIST_FILTERS.map((item) => ({ ...item, icon: null }))}
           />
         </div>
-        <SegmentedToggle
-          showLabels
-          value={filter}
-          onChange={setFilter}
-          items={LIST_FILTERS.map((item) => ({ ...item, icon: null }))}
-        />
       </div>
       {deferredPage ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
           Queries for pages whose URL contains “{deferredPage}”, with those
           pages&apos; numbers.
         </p>
       ) : null}
       {list.isPending ? (
-        <Skeleton className="h-80 w-full" />
+        <div className="p-4">
+          <Skeleton className="h-80 w-full" />
+        </div>
       ) : list.isError ? (
-        <QueryError
-          error={list.error}
-          fallback="Couldn't load the queries."
-          onRetry={() => void list.refetch()}
-          isRetrying={list.isFetching}
-        />
+        <div className="p-4">
+          <QueryError
+            error={list.error}
+            fallback="Couldn't load the queries."
+            onRetry={() => void list.refetch()}
+            isRetrying={list.isFetching}
+          />
+        </div>
       ) : list.data ? (
         <CompareTable
           key={`${filter}-${deferredSearch}-${deferredPage}-${sort?.key}-${sort?.dir}`}
