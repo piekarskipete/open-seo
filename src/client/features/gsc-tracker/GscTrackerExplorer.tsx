@@ -1,10 +1,17 @@
 import { useDeferredValue, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { RowSelectionState } from "@tanstack/react-table";
+import { Crosshair } from "lucide-react";
 import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import { Input } from "@/client/components/ui/input";
 import { Skeleton } from "@/client/components/ui/skeleton";
 import { Spinner } from "@/client/components/ui/spinner";
+import {
+  TableBulkActionBar,
+  TableBulkActionButton,
+} from "@/client/components/table/TableBulkActionBar";
+import { TrackQueriesDialog } from "@/client/features/gsc-tracker/GscTrackerTrackQueriesDialog";
 import { CompareTable } from "@/client/features/gsc-tracker/GscTrackerCompareTable";
 import {
   applyListFilter,
@@ -32,13 +39,18 @@ export function ExplorerTab({
   days,
   defaultSortKey,
   onSelect,
+  canManage,
 }: {
   projectId: string;
   days: GscTrackerRangeDays;
   /** The project's default order for the "All" view (Settings). */
   defaultSortKey: GscTrackerSortKey;
   onSelect: (query: string) => void;
+  /** Members who manage integrations can add queries to the tracker. */
+  canManage: boolean;
 }) {
+  const [selection, setSelection] = useState<RowSelectionState>({});
+  const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState("");
   const [filter, setFilter] = useState<ListFilter>("all");
@@ -48,6 +60,8 @@ export function ExplorerTab({
   const sort =
     chosenSort ?? (filter === "all" ? defaultSort(defaultSortKey) : null);
   const deferredSearch = useDeferredValue(search.trim());
+  // Selected queries still in the list; a filter keeps the rest selected
+  // for when they come back.
   const deferredPage = useDeferredValue(page.trim());
   const list = useQuery({
     queryKey: ["gscTrackerList", projectId, days, deferredSearch, deferredPage],
@@ -62,6 +76,10 @@ export function ExplorerTab({
       }),
     placeholderData: keepPreviousData,
   });
+  const listed = new Set((list.data?.rows ?? []).map((row) => row.key));
+  const selectedQueries = Object.keys(selection).filter(
+    (key) => selection[key] && listed.has(key),
+  );
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
@@ -122,6 +140,38 @@ export function ExplorerTab({
           onSelect={onSelect}
           sort={sort}
           onSort={(key) => setChosenSort(nextSort(sort, key))}
+          selection={canManage ? selection : undefined}
+          onSelectionChange={setSelection}
+        />
+      ) : null}
+      {canManage ? (
+        <TableBulkActionBar
+          selectedCount={selectedQueries.length}
+          selectedLabel={selectedQueries.length === 1 ? "query" : "queries"}
+          onClear={() => setSelection({})}
+          actions={
+            <div className="flex items-center gap-0.5 px-1.5">
+              <TableBulkActionButton
+                icon={<Crosshair className="size-3.5" />}
+                onClick={() => setAdding(true)}
+              >
+                Add to GSC Tracker
+              </TableBulkActionButton>
+            </div>
+          }
+        />
+      ) : null}
+      {adding ? (
+        <TrackQueriesDialog
+          projectId={projectId}
+          queries={selectedQueries}
+          days={days}
+          page={deferredPage}
+          onDone={() => {
+            setAdding(false);
+            setSelection({});
+          }}
+          onClose={() => setAdding(false)}
         />
       ) : null}
     </div>

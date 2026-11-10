@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import { DataTable, useDataTable } from "@/client/components/table/DataTable";
+import type { ColumnDef, RowSelectionState } from "@tanstack/react-table";
+import {
+  DataTable,
+  makeSelectionColumn,
+  useDataTable,
+  useSelectionAnchor,
+} from "@/client/components/table/DataTable";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
 import { TablePagination } from "@/client/components/table/TablePagination";
 import { Delta } from "@/client/features/gsc-tracker/GscTrackerParts";
@@ -56,6 +61,8 @@ export function CompareTable({
   onSelect,
   sort,
   onSort,
+  selection,
+  onSelectionChange,
 }: {
   rows: CompareRow[];
   keyLabel: string;
@@ -63,13 +70,26 @@ export function CompareTable({
   /** The column the rows are ordered by, marked in its header. */
   sort?: SortState | null;
   onSort?: (key: GscTrackerSortKey) => void;
+  /** Selected rows by key; with it, the table gets a checkbox column. */
+  selection?: RowSelectionState;
+  onSelectionChange?: (next: RowSelectionState) => void;
 }) {
   const formatMetric = useFormatMetric();
+  const anchorRef = useSelectionAnchor();
+  const selectable = selection !== undefined;
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
   const showUrls = rows.some((row) => row.urls !== undefined);
 
   const columns = useMemo<ColumnDef<CompareRow>[]>(
     () => [
+      ...(selectable
+        ? [
+            makeSelectionColumn<CompareRow>(
+              anchorRef,
+              (row) => `Select ${row.original.key}`,
+            ),
+          ]
+        : []),
       {
         id: "key",
         header: () => keyLabel,
@@ -121,16 +141,32 @@ export function CompareTable({
           ]
         : []),
     ],
-    [formatMetric, keyLabel, onSelect, onSort, showUrls, sort],
+    [
+      anchorRef,
+      formatMetric,
+      keyLabel,
+      onSelect,
+      onSort,
+      selectable,
+      showUrls,
+      sort,
+    ],
   );
 
   const table = useDataTable({
     data: rows,
     columns,
     withPagination: true,
-    state: { pagination },
     onPaginationChange: setPagination,
     getRowId: (row) => row.key,
+    enableRowSelection: selectable,
+    state: { pagination, rowSelection: selection ?? {} },
+    onRowSelectionChange: (updater) => {
+      if (!onSelectionChange) return;
+      onSelectionChange(
+        typeof updater === "function" ? updater(selection ?? {}) : updater,
+      );
+    },
     // The rows are rebuilt on every render; the Explorer remounts the table
     // when its filter or order changes, so the page only resets then.
     autoResetPageIndex: false,
