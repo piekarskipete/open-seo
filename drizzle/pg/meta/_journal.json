@@ -344,6 +344,13 @@
       "when": 1794315765949,
       "tag": "0048_gsc_service_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1794317711639,
+      "tag": "0049_gsc_tracker_keywords",
+      "breakpoints": true
     }
   ]
 }

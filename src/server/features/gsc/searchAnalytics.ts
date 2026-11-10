@@ -60,6 +60,9 @@ export type GscPerformanceInput = {
   startDate?: string;
   endDate?: string;
   filters?: GscPerformanceFilter[];
+  /** App-internal (not exposed to MCP): RE2 patterns a dimension must match,
+   *  e.g. one request for a list of exact queries. */
+  regexFilters?: { dimension: GscDimension; expression: string }[];
   rowLimit?: number;
   startRow?: number;
   type?: GscSearchType;
@@ -163,10 +166,15 @@ export function buildSearchAnalyticsRequest(
   if (input.startRow && input.startRow > 0) {
     request.startRow = input.startRow;
   }
-  if (input.filters && input.filters.length > 0) {
-    request.dimensionFilterGroups = [
-      { groupType: "and", filters: input.filters },
-    ];
+  const filters = [
+    ...(input.filters ?? []),
+    ...(input.regexFilters ?? []).map((filter) => ({
+      ...filter,
+      operator: "includingRegex",
+    })),
+  ];
+  if (filters.length > 0) {
+    request.dimensionFilterGroups = [{ groupType: "and", filters }];
   }
   return request;
 }

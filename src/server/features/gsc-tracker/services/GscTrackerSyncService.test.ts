@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { planSyncDays } from "./GscTrackerSyncService";
+import { planSyncDays } from "./gscTrackerPlan";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@/server/features/gsc/services/GscService", () => ({
@@ -56,6 +56,7 @@ describe("planSyncDays", () => {
           lastSyncedAt: fresh,
         },
         now,
+        6,
       ),
     ).toEqual({ forward: [], backward: [] });
   });

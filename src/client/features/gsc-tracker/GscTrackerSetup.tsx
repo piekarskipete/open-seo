@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { History, RefreshCw } from "lucide-react";
+import { History, RefreshCw, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/client/components/ConfirmDialog";
 import { EmptyState } from "@/client/components/EmptyState";
@@ -9,12 +9,23 @@ import { Alert, AlertDescription } from "@/client/components/ui/alert";
 import { Button } from "@/client/components/ui/button";
 import { formatDay } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/client/components/ui/popover";
+import {
+  setGscTrackerPositionFormat,
   startGscTracker,
   stopGscTracker,
   syncGscTracker,
   type getGscTrackerStatus,
 } from "@/serverFunctions/gscTracker";
+import type { GscTrackerPositionFormat } from "@/shared/gsc-tracker";
 
 // Turning the tracker on and off, and its sync status.
 
@@ -135,6 +146,10 @@ export function TrackerStatus({
               <RefreshCw className="size-3.5" />
               Sync now
             </Button>
+            <TrackerSettings
+              projectId={projectId}
+              positionFormat={status.positionFormat}
+            />
             <Button
               variant="ghost"
               size="sm"
@@ -165,5 +180,67 @@ export function TrackerStatus({
         </ConfirmDialog>
       ) : null}
     </div>
+  );
+}
+
+const POSITION_FORMATS: {
+  value: GscTrackerPositionFormat;
+  label: string;
+}[] = [
+  { value: "decimal", label: "7.4" },
+  { value: "whole", label: "7" },
+];
+
+/** Project-wide display settings for the tracker. */
+function TrackerSettings({
+  projectId,
+  positionFormat,
+}: {
+  projectId: string;
+  positionFormat: GscTrackerPositionFormat;
+}) {
+  const queryClient = useQueryClient();
+  const save = useMutation({
+    mutationFn: (value: GscTrackerPositionFormat) =>
+      setGscTrackerPositionFormat({
+        data: { projectId, positionFormat: value },
+      }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: ["gscTrackerStatus", projectId],
+      }),
+  });
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm" aria-label="Tracker settings" />
+        }
+      >
+        <Settings className="size-3.5" />
+        Settings
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72">
+        <PopoverHeader>
+          <PopoverTitle>Tracker settings</PopoverTitle>
+          <PopoverDescription>
+            Applies to everyone viewing this project.
+          </PopoverDescription>
+        </PopoverHeader>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span>Position format</span>
+          <SegmentedToggle
+            showLabels
+            value={save.variables ?? positionFormat}
+            onChange={(value) => save.mutate(value)}
+            items={POSITION_FORMATS.map((item) => ({ ...item, icon: null }))}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          7.4 shows Search Console&apos;s average position; 7 rounds it to a
+          whole place.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }

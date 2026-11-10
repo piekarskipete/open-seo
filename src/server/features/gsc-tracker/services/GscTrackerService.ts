@@ -27,6 +27,8 @@ import {
   gscTrackerLatestDay,
 } from "./gscTrackerDates";
 import { syncTracker } from "./GscTrackerSyncService";
+import { syncKeywords } from "./gscTrackerKeywordSync";
+import type { GscTrackerPositionFormat } from "@/shared/gsc-tracker";
 
 /**
  * GSC Tracker: keeps a project's Search Console history in OpenSEO and reads
@@ -86,6 +88,8 @@ async function getStatus(projectId: string) {
   const now = new Date();
   const floor = gscTrackerFloor(now);
   const latest = gscTrackerLatestDay(now);
+  const positionFormat: GscTrackerPositionFormat =
+    tracker?.positionFormat === "whole" ? "whole" : "decimal";
   const storedDays =
     tracker?.oldestDate && tracker.newestDate
       ? daysBetween(tracker.oldestDate, tracker.newestDate)
@@ -99,6 +103,7 @@ async function getStatus(projectId: string) {
     newestDate: tracker?.newestDate ?? null,
     lastSyncedAt: tracker?.lastSyncedAt ?? null,
     lastError: tracker?.lastError ?? null,
+    positionFormat,
     progress: Math.min(1, storedDays / daysBetween(floor, latest)),
   };
 }
@@ -124,6 +129,7 @@ async function enable(input: {
   // The first batch runs now so the page has recent days right away; the cron
   // fetches the rest of the history.
   await syncTracker(tracker);
+  await syncKeywords(tracker);
 }
 
 async function syncNow(projectId: string) {
@@ -131,6 +137,17 @@ async function syncNow(projectId: string) {
   const tracker = await GscTrackerRepository.get(projectId);
   if (!tracker) throw new AppError("NOT_FOUND", "Tracking is off.");
   await syncTracker(tracker);
+  await syncKeywords(tracker);
+}
+
+/** How the project shows positions: 7.4 or 7. */
+async function setPositionFormat(
+  projectId: string,
+  positionFormat: GscTrackerPositionFormat,
+) {
+  const tracker = await GscTrackerRepository.get(projectId);
+  if (!tracker) throw new AppError("NOT_FOUND", "Tracking is off.");
+  await GscTrackerRepository.update(projectId, { positionFormat });
 }
 
 async function disable(projectId: string) {
@@ -407,6 +424,7 @@ export const GscTrackerService = {
   getStatus,
   enable,
   syncNow,
+  setPositionFormat,
   disable,
   getOverview,
   compareBy,

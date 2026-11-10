@@ -2,6 +2,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { DB_BATCH_SIZE, runBatch } from "@/db/runBatch";
 import {
+  gscTrackerKeywordDays,
+  gscTrackerKeywords,
   gscTrackerPages,
   gscTrackerProjects,
   gscTrackerQueries,
@@ -71,7 +73,12 @@ async function update(
   values: Partial<
     Pick<
       GscTrackerProject,
-      "siteUrl" | "oldestDate" | "newestDate" | "lastSyncedAt" | "lastError"
+      | "siteUrl"
+      | "oldestDate"
+      | "newestDate"
+      | "lastSyncedAt"
+      | "lastError"
+      | "positionFormat"
     >
   >,
 ): Promise<void> {
@@ -84,7 +91,19 @@ async function update(
 /** Drops the stored history but keeps tracking on, e.g. after the project
  *  switched to another Search Console property. */
 async function clearHistory(projectId: string): Promise<void> {
+  const projectKeywords = db
+    .select({ id: gscTrackerKeywords.id })
+    .from(gscTrackerKeywords)
+    .where(eq(gscTrackerKeywords.projectId, projectId));
   await runBatch((tx) => [
+    // Followed phrases stay; their fetched days start over.
+    tx
+      .delete(gscTrackerKeywordDays)
+      .where(inArray(gscTrackerKeywordDays.keywordId, projectKeywords)),
+    tx
+      .update(gscTrackerKeywords)
+      .set({ oldestDate: null, newestDate: null, lastSyncedAt: null })
+      .where(eq(gscTrackerKeywords.projectId, projectId)),
     tx.delete(gscTrackerRows).where(eq(gscTrackerRows.projectId, projectId)),
     tx
       .delete(gscTrackerTotals)
@@ -99,6 +118,9 @@ async function clearHistory(projectId: string): Promise<void> {
 /** Stops tracking and deletes everything stored for the project. */
 async function remove(projectId: string): Promise<void> {
   await clearHistory(projectId);
+  await db
+    .delete(gscTrackerKeywords)
+    .where(eq(gscTrackerKeywords.projectId, projectId));
   await db
     .delete(gscTrackerProjects)
     .where(eq(gscTrackerProjects.projectId, projectId));
@@ -216,6 +238,7 @@ export const GscTrackerRepository = {
   update,
   clearHistory,
   remove,
+  resolveKeys,
   replaceDay,
   replaceTotals,
 };

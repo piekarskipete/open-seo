@@ -138,6 +138,8 @@ export const {
   gscTrackerPages,
   gscTrackerRows,
   gscTrackerTotals,
+  gscTrackerKeywords,
+  gscTrackerKeywordDays,
   googleServiceAccounts,
   telemetryState,
   aiTrackers,
