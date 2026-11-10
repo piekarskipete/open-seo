@@ -67,6 +67,10 @@ declare namespace Cloudflare {
     CRAWLER_ACCESS_SECRET?: string;
     // GSC Tracker: query/page rows stored per day (default 1000, max 25000).
     GSC_TRACKER_ROWS_PER_DAY?: string;
+    // Encrypts uploaded Google service account keys for Search Console.
+    // Setting it turns the feature on; unset (and on hosted or gateway
+    // deployments) only OAuth connections are offered.
+    GOOGLE_SERVICE_ACCOUNT_SECRET?: string;
     // Private Ed25519 JWK that signs site audit requests (Web Bot Auth). Hosted
     // only; unset sends unsigned requests.
     WEB_BOT_AUTH_JWK?: string;

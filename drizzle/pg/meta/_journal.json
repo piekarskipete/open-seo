@@ -337,6 +337,13 @@
       "when": 1794310192994,
       "tag": "0047_gsc_tracker",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1794315765949,
+      "tag": "0048_gsc_service_accounts",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,27 @@
 
 > Open source alternative to Semrush and Ahrefs
 
+## About this fork
+
+This is a fork of [every-app/open-seo](https://github.com/every-app/open-seo) that adds Google Search Console modules. Each module lives on its own branch so it can be proposed upstream on its own; `combined` brings them together for day-to-day use and testing.
+
+| Branch                        | Based on              | Contains                                                                                                                                     | Purpose                                                                                                                                                         |
+| ----------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main`                        | upstream `main`       | Upstream OpenSEO, unchanged                                                                                                                  | Mirror of the original project. Upstream updates land here first.                                                                                               |
+| `feature/gsc-tracker`         | `main`                | **GSC Tracker**: stored Search Console history (up to 16 months, synced in the background) with trend, query, page and cannibalization views | One module, ready for an upstream pull request. Migrations: SQLite `0069`, Postgres `0047`.                                                                     |
+| `feature/gsc-service-account` | `main`                | **Service account keys**: connect Search Console by uploading a Google service account JSON key instead of signing in with Google            | One module, ready for an upstream pull request. Migrations: SQLite `0069`, Postgres `0047`.                                                                     |
+| `combined`                    | `feature/gsc-tracker` | **Both modules**: everything in `feature/gsc-tracker` plus everything in `feature/gsc-service-account`                                       | The working branch: run, test and deploy this one. With a service account connected, GSC Tracker syncs through the key, with no Google sign-in that can expire. |
+
+### How the branches work together
+
+- New work starts on `combined`. Once a change is finished, it is copied to the module branch it belongs to, so each module branch stays a clean, self-contained proposal.
+- A change made directly on a module branch reaches `combined` by merging that branch into it again.
+- Upstream updates go into `main` first, then into the module branches and `combined`.
+
+### Migration numbers
+
+Both module branches were cut from the same `main`, so each numbers its migration `0069` (SQLite) / `0047` (Postgres). In `combined` the tracker keeps those numbers and the service account migration is renumbered to `0070` / `0048`. Only file names differ; the SQL is the same. A database created from `combined` must keep using `combined`'s numbering.
+
 OpenSEO is an SEO tool for _the people_. If tools like Semrush or Ahrefs are too expensive or bloated, OpenSEO is a pay-as-you-go alternative that you actually control.
 
 > All-in-one SEO tool for you and your AI agent.

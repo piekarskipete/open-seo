@@ -70,6 +70,7 @@ services:
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       CRAWLER_ACCESS_SECRET: ${CRAWLER_ACCESS_SECRET:-}
       GSC_TRACKER_ROWS_PER_DAY: ${GSC_TRACKER_ROWS_PER_DAY:-}
+      GOOGLE_SERVICE_ACCOUNT_SECRET: ${GOOGLE_SERVICE_ACCOUNT_SECRET:-}
     volumes: [config:/config, web-config:/web-config]
     depends_on:
       runtime: { condition: service_started }
