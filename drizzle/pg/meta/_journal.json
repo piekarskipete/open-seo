@@ -351,6 +351,13 @@
       "when": 1794321098738,
       "tag": "0049_gsc_tracker_explorer_sort",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1794323063469,
+      "tag": "0050_gsc_tracker_keyword_targets",
+      "breakpoints": true
     }
   ]
 }

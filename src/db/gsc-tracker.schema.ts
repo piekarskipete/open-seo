@@ -152,9 +152,11 @@ export const gscTrackerKeywords = sqliteTable(
       .default(sql`(current_timestamp)`),
   },
   (table) => [
-    uniqueIndex("gsc_tracker_keywords_project_query_idx").on(
+    // A phrase can be followed for several target URLs, each its own entry.
+    uniqueIndex("gsc_tracker_keywords_project_query_target_idx").on(
       table.projectId,
       table.query,
+      table.targetUrl,
     ),
   ],
 );

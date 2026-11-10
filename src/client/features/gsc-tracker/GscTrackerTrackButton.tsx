@@ -11,9 +11,9 @@ import {
 import { comparableUrl, normalizeQuery } from "@/shared/gsc-tracker";
 
 /**
- * Follows a query in the tracker with this page as its target. Shows
- * "Tracked" when it already is, and offers to switch the target when the
- * query is followed with another page.
+ * Follows a query in the tracker with this page as its target. The same
+ * query can be followed for several pages, each its own entry; a page
+ * already followed for the query shows "Tracked".
  */
 export function TrackPageButton({
   projectId,
@@ -47,11 +47,12 @@ export function TrackPageButton({
     onError: (error) => toast.error(getStandardErrorMessage(error)),
   });
 
-  const followed = targets.data?.find(
-    (target) => target.query === normalizeQuery(query),
+  const tracked = targets.data?.some(
+    (target) =>
+      target.query === normalizeQuery(query) &&
+      comparableUrl(target.targetUrl) === comparableUrl(url),
   );
-  if (followed && comparableUrl(followed.targetUrl) === comparableUrl(url))
-    return <Badge variant="success">Tracked</Badge>;
+  if (tracked) return <Badge variant="success">Tracked</Badge>;
   return (
     <Button
       variant="outline"
@@ -59,14 +60,9 @@ export function TrackPageButton({
       disabled={targets.isPending}
       pending={add.isPending}
       onClick={() => add.mutate()}
-      title={
-        followed
-          ? `Tracked with ${followed.targetUrl}; make this page the target instead`
-          : undefined
-      }
     >
       {add.isPending ? null : <Plus className="size-3" />}
-      {followed ? "Set as target" : "Add to tracker"}
+      Add to tracker
     </Button>
   );
 }

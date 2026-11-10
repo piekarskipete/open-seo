@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { DB_BATCH_SIZE, runBatch } from "@/db/runBatch";
 import {
@@ -33,10 +33,14 @@ async function list(projectId: string): Promise<GscTrackerKeyword[]> {
     .select()
     .from(gscTrackerKeywords)
     .where(eq(gscTrackerKeywords.projectId, projectId))
-    .orderBy(gscTrackerKeywords.createdAt, gscTrackerKeywords.query);
+    .orderBy(
+      gscTrackerKeywords.createdAt,
+      gscTrackerKeywords.query,
+      gscTrackerKeywords.targetUrl,
+    );
 }
 
-/** Adds phrases; a phrase already followed gets the new target URL. */
+/** Follows phrase/URL pairs; a pair already followed is left as it is. */
 async function upsertMany(
   projectId: string,
   entries: { query: string; targetUrl: string }[],
@@ -52,10 +56,7 @@ async function upsertMany(
           targetUrl: entry.targetUrl,
         })),
       )
-      .onConflictDoUpdate({
-        target: [gscTrackerKeywords.projectId, gscTrackerKeywords.query],
-        set: { targetUrl: sql`excluded.target_url` },
-      });
+      .onConflictDoNothing();
   }
 }
 

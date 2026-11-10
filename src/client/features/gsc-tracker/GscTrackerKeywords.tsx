@@ -95,8 +95,10 @@ export function KeywordsTab({
         Clicks, impressions, CTR and average position are the month&apos;s
         totals for the target URL. Open a phrase to see its position on each day
         of the month (each day fetched from Search Console on its own) and every
-        page of yours that showed for it. A highlighted day means another page
-        got more clicks or impressions than the target.
+        page of yours that showed for it. Green days moved up since the day
+        before and red days moved down, stronger the bigger the move; an
+        outlined day means another page got more clicks or impressions than the
+        target.
       </p>
       {result.isPending ? (
         <Skeleton className="h-64 w-full" />
@@ -256,9 +258,31 @@ function KeywordRow({
   );
 }
 
+// Backgrounds by how far a position moved since the day before: the bigger
+// the move, the stronger the color.
+const UP_TONES = ["bg-success/15", "bg-success/30", "bg-success/50"];
+const DOWN_TONES = [
+  "bg-destructive/15",
+  "bg-destructive/30",
+  "bg-destructive/50",
+];
+
+/** A day's tone: green when the position improved, red when it dropped. */
+function moveTone(move: number): string {
+  const size = Math.abs(move);
+  if (size < 0.5) return "bg-card";
+  const level = size >= 5 ? 2 : size >= 2 ? 1 : 0;
+  return move > 0 ? UP_TONES[level] : DOWN_TONES[level];
+}
+
+/** "2026-10-05" as "05.10". */
+function dayMonth(day: string): string {
+  return `${day.slice(8, 10)}.${day.slice(5, 7)}`;
+}
+
 /**
- * One cell per day of the month with that day's position only. The grid
- * wraps, so a whole month fits without scrolling sideways.
+ * One cell per day of the month with that day's position only, all on one
+ * line: the cells share the width, so a whole month fits without scrolling.
  */
 function DayGrid({
   page,
@@ -271,7 +295,12 @@ function DayGrid({
 }) {
   const positionFormat = usePositionFormat();
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-1">
+    <div
+      className="grid gap-0.5"
+      style={{
+        gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
+      }}
+    >
       {days.map((day, index) => {
         const today = page.days[day]?.position;
         const before =
@@ -288,20 +317,15 @@ function DayGrid({
                 : undefined
             }
             className={cn(
-              "rounded border px-1 py-0.5 text-center tabular-nums",
-              beaten ? "border-warning/50 bg-warning/15" : "bg-card",
+              "min-w-0 overflow-hidden rounded border py-0.5 text-center tabular-nums",
+              moveTone(move),
+              beaten && "border-warning ring-1 ring-warning ring-inset",
             )}
           >
-            <div className="text-[10px] text-muted-foreground">
-              {Number(day.slice(8))}
+            <div className="truncate text-[9px] leading-tight text-muted-foreground">
+              {dayMonth(day)}
             </div>
-            <div
-              className={cn(
-                "text-xs",
-                move >= 0.5 && "text-success",
-                move <= -0.5 && "text-destructive",
-              )}
-            >
+            <div className="truncate text-[11px] leading-tight">
               {today === undefined ? (
                 <span className="text-muted-foreground">–</span>
               ) : (
@@ -349,21 +373,20 @@ function KeywordDetail({
       ) : null}
       {keyword.pages.map((page) => (
         <div key={page.url} className="space-y-1.5">
-          <div className="flex items-start gap-4 text-xs">
-            <span className="min-w-0 flex-1 break-all">
-              {page.url}
-              {page.isTarget ? (
-                <Badge variant="success" className="ml-2">
-                  Target
-                </Badge>
-              ) : page.stronger ? (
-                <Badge variant="warning" className="ml-2">
-                  Stronger than target
-                </Badge>
-              ) : null}
-            </span>
-            <MetricColumns values={monthValues(page)} />
-          </div>
+          {/* The target's URL and totals are already on the phrase row. */}
+          {page.isTarget ? null : (
+            <div className="flex items-start gap-4 text-xs">
+              <span className="min-w-0 flex-1 break-all">
+                {page.url}
+                {page.stronger ? (
+                  <Badge variant="warning" className="ml-2">
+                    Stronger than target
+                  </Badge>
+                ) : null}
+              </span>
+              <MetricColumns values={monthValues(page)} />
+            </div>
+          )}
           <DayGrid
             page={page}
             days={days}

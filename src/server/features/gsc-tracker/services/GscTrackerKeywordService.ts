@@ -136,33 +136,36 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
   };
 }
 
-/** Follows phrases (or retargets ones already followed) and fetches their
- *  recent days right away. */
+/** Follows phrase/URL pairs and fetches their recent days right away. The
+ *  same phrase can be followed for several URLs, each its own entry; a pair
+ *  already followed (same phrase, same page) is skipped. */
 async function add(
   projectId: string,
   entries: { query: string; targetUrl: string }[],
 ) {
   const tracker = await GscTrackerRepository.get(projectId);
   if (!tracker) throw new AppError("NOT_FOUND", "Tracking is off.");
-  const unique = new Map<string, string>();
+  const existing = await GscTrackerKeywordRepository.list(projectId);
+  const pairKey = (query: string, url: string) =>
+    `${query}\n${comparableUrl(url)}`;
+  const known = new Set(
+    existing.map((keyword) => pairKey(keyword.query, keyword.targetUrl)),
+  );
+  const fresh = new Map<string, { query: string; targetUrl: string }>();
   for (const entry of entries) {
     const query = normalizeQuery(entry.query);
-    if (query) unique.set(query, entry.targetUrl.trim());
+    const targetUrl = entry.targetUrl.trim();
+    const key = pairKey(query, targetUrl);
+    if (query && !known.has(key)) fresh.set(key, { query, targetUrl });
   }
-  const existing = await GscTrackerKeywordRepository.list(projectId);
-  const known = new Set(existing.map((keyword) => keyword.query));
-  const added = [...unique.keys()].filter((query) => !known.has(query)).length;
-  if (existing.length + added > MAX_KEYWORDS)
+  if (existing.length + fresh.size > MAX_KEYWORDS)
     throw new AppError(
       "VALIDATION_ERROR",
       `A project can follow up to ${MAX_KEYWORDS} phrases.`,
     );
-  await GscTrackerKeywordRepository.upsertMany(
-    projectId,
-    [...unique].map(([query, targetUrl]) => ({ query, targetUrl })),
-  );
+  await GscTrackerKeywordRepository.upsertMany(projectId, [...fresh.values()]);
   await syncKeywords(tracker);
-  return { added, updated: unique.size - added };
+  return { added: fresh.size, skipped: entries.length - fresh.size };
 }
 
 /** Every followed phrase with its target, to show which pages are tracked. */

@@ -44,7 +44,7 @@ export function AddPhrasesDialog({
     onSuccess: (saved) => {
       toast.success(
         `${saved.added} phrase${saved.added === 1 ? "" : "s"} added${
-          saved.updated > 0 ? `, ${saved.updated} retargeted` : ""
+          saved.skipped > 0 ? `, ${saved.skipped} already followed` : ""
         }`,
       );
       void queryClient.invalidateQueries({
