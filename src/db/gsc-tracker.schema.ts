@@ -34,6 +34,9 @@ export const gscTrackerProjects = sqliteTable(
     enabledByUserId: text("enabled_by_user_id").notNull(),
     // How positions are shown: "decimal" (7.4) or "whole" (7).
     positionFormat: text("position_format").notNull().default("decimal"),
+    // Query Explorer's default order: "clicks", "impressions", "ctr" or
+    // "position".
+    explorerSort: text("explorer_sort").notNull().default("clicks"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),

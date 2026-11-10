@@ -21,14 +21,18 @@ import { AppError } from "@/server/lib/errors";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import { GscTrackerRepository } from "../repositories/GscTrackerRepository";
 import {
-  addDays,
   daysBetween,
   gscTrackerFloor,
   gscTrackerLatestDay,
 } from "./gscTrackerDates";
 import { syncTracker } from "./GscTrackerSyncService";
+import { metrics, periods } from "./gscTrackerWindows";
 import { syncKeywords } from "./gscTrackerKeywordSync";
-import type { GscTrackerPositionFormat } from "@/shared/gsc-tracker";
+import {
+  GSC_TRACKER_SORT_KEYS,
+  type GscTrackerPositionFormat,
+  type GscTrackerSortKey,
+} from "@/shared/gsc-tracker";
 
 /**
  * GSC Tracker: keeps a project's Search Console history in OpenSEO and reads
@@ -43,26 +47,6 @@ const LIST_LIMIT = 1000;
 const CANNIBAL_MIN_SHARE = 0.1;
 const CANNIBAL_MIN_IMPRESSIONS = 10;
 const CANNIBAL_LIMIT = 200;
-
-export type GscTrackerMetrics = {
-  clicks: number;
-  impressions: number;
-  ctr: number | null;
-  position: number | null;
-};
-
-function metrics(
-  clicks: number,
-  impressions: number,
-  positionWeight: number,
-): GscTrackerMetrics {
-  return {
-    clicks,
-    impressions,
-    ctr: impressions > 0 ? clicks / impressions : null,
-    position: impressions > 0 ? positionWeight / impressions : null,
-  };
-}
 
 /** Self-hosted deployments that hold their own Google access. Behind the
  *  Every App gateway Google calls are made per request, not from the cron. */
@@ -90,6 +74,9 @@ async function getStatus(projectId: string) {
   const latest = gscTrackerLatestDay(now);
   const positionFormat: GscTrackerPositionFormat =
     tracker?.positionFormat === "whole" ? "whole" : "decimal";
+  const explorerSort: GscTrackerSortKey =
+    GSC_TRACKER_SORT_KEYS.find((key) => key === tracker?.explorerSort) ??
+    "clicks";
   const storedDays =
     tracker?.oldestDate && tracker.newestDate
       ? daysBetween(tracker.oldestDate, tracker.newestDate)
@@ -104,6 +91,7 @@ async function getStatus(projectId: string) {
     lastSyncedAt: tracker?.lastSyncedAt ?? null,
     lastError: tracker?.lastError ?? null,
     positionFormat,
+    explorerSort,
     progress: Math.min(1, storedDays / daysBetween(floor, latest)),
   };
 }
@@ -140,33 +128,22 @@ async function syncNow(projectId: string) {
   await syncKeywords(tracker);
 }
 
-/** How the project shows positions: 7.4 or 7. */
-async function setPositionFormat(
+/** Project-wide display settings: how positions read (7.4 or 7) and
+ *  Query Explorer's default order. */
+async function updateSettings(
   projectId: string,
-  positionFormat: GscTrackerPositionFormat,
+  settings: {
+    positionFormat?: GscTrackerPositionFormat;
+    explorerSort?: GscTrackerSortKey;
+  },
 ) {
   const tracker = await GscTrackerRepository.get(projectId);
   if (!tracker) throw new AppError("NOT_FOUND", "Tracking is off.");
-  await GscTrackerRepository.update(projectId, { positionFormat });
+  await GscTrackerRepository.update(projectId, settings);
 }
 
 async function disable(projectId: string) {
   await GscTrackerRepository.remove(projectId);
-}
-
-/** The selected window ending at the newest stored day, and the one before. */
-async function periods(projectId: string, days: number) {
-  const tracker = await GscTrackerRepository.get(projectId);
-  if (!tracker?.newestDate) return null;
-  const currentEnd = tracker.newestDate;
-  const currentStart = addDays(currentEnd, -(days - 1));
-  const previousStart = addDays(currentStart, -days);
-  return {
-    currentStart,
-    currentEnd,
-    previousStart,
-    previousEnd: addDays(currentStart, -1),
-  };
 }
 
 async function getOverview(projectId: string, days: number) {
@@ -427,7 +404,7 @@ export const GscTrackerService = {
   getStatus,
   enable,
   syncNow,
-  setPositionFormat,
+  updateSettings,
   disable,
   getOverview,
   compareQueries,

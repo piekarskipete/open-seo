@@ -7,11 +7,18 @@ import { Skeleton } from "@/client/components/ui/skeleton";
 import { CompareTable } from "@/client/features/gsc-tracker/GscTrackerParts";
 import {
   applyListFilter,
+  defaultSort,
   LIST_FILTERS,
+  nextSort,
+  sortRows,
   type ListFilter,
+  type SortState,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getGscTrackerList } from "@/serverFunctions/gscTracker";
-import type { GscTrackerRangeDays } from "@/shared/gsc-tracker";
+import type {
+  GscTrackerRangeDays,
+  GscTrackerSortKey,
+} from "@/shared/gsc-tracker";
 
 /**
  * Every query with its clicks, impressions, CTR and position against the
@@ -22,15 +29,23 @@ import type { GscTrackerRangeDays } from "@/shared/gsc-tracker";
 export function ExplorerTab({
   projectId,
   days,
+  defaultSortKey,
   onSelect,
 }: {
   projectId: string;
   days: GscTrackerRangeDays;
+  /** The project's default order for the "All" view (Settings). */
+  defaultSortKey: GscTrackerSortKey;
   onSelect: (query: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState("");
   const [filter, setFilter] = useState<ListFilter>("all");
+  // A clicked header wins; until then "All" uses the project default and
+  // the other views keep their own order (biggest gain first, and so on).
+  const [chosenSort, setChosenSort] = useState<SortState | null>(null);
+  const sort =
+    chosenSort ?? (filter === "all" ? defaultSort(defaultSortKey) : null);
   const deferredSearch = useDeferredValue(search.trim());
   const deferredPage = useDeferredValue(page.trim());
   const list = useQuery({
@@ -89,10 +104,16 @@ export function ExplorerTab({
         />
       ) : list.data ? (
         <CompareTable
-          key={`${filter}-${deferredSearch}-${deferredPage}`}
-          rows={applyListFilter(list.data.rows, filter)}
+          key={`${filter}-${deferredSearch}-${deferredPage}-${sort?.key}-${sort?.dir}`}
+          rows={
+            sort
+              ? sortRows(applyListFilter(list.data.rows, filter), sort)
+              : applyListFilter(list.data.rows, filter)
+          }
           keyLabel="Query"
           onSelect={onSelect}
+          sort={sort}
+          onSort={(key) => setChosenSort(nextSort(sort, key))}
         />
       ) : null}
     </div>

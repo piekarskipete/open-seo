@@ -1,0 +1,1 @@
+ALTER TABLE `gsc_tracker_projects` ADD `explorer_sort` text DEFAULT 'clicks' NOT NULL;

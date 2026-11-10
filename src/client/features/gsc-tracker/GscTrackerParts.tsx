@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Line, LineChart } from "recharts";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "cn";
 import { EmptyState } from "@/client/components/EmptyState";
 import { QueryError } from "@/client/components/QueryState";
@@ -48,6 +49,7 @@ import {
   type CompareRow,
   type Metric,
   type Metrics,
+  type SortState,
 } from "./gscTrackerView";
 
 /** Change from the previous window. For position, lower is better. */
@@ -199,10 +201,15 @@ export function CompareTable({
   rows,
   keyLabel,
   onSelect,
+  sort,
+  onSort,
 }: {
   rows: CompareRow[];
   keyLabel: string;
   onSelect?: (key: string) => void;
+  /** The column the rows are ordered by, marked in its header. */
+  sort?: SortState | null;
+  onSort?: (key: Metric) => void;
 }) {
   const formatMetric = useFormatMetric();
   const [shown, setShown] = useState(PAGE_SIZE);
@@ -222,8 +229,35 @@ export function CompareTable({
             <TableRow>
               <TableHead>{keyLabel}</TableHead>
               {METRICS.map((metric) => (
-                <TableHead key={metric} className="text-right">
-                  {METRIC_LABELS[metric]}
+                <TableHead
+                  key={metric}
+                  className="text-right"
+                  aria-sort={
+                    sort?.key === metric
+                      ? sort.dir === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : undefined
+                  }
+                >
+                  {onSort ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                      onClick={() => onSort(metric)}
+                    >
+                      {METRIC_LABELS[metric]}
+                      {sort?.key === metric ? (
+                        sort.dir === "asc" ? (
+                          <ArrowUp className="size-3" />
+                        ) : (
+                          <ArrowDown className="size-3" />
+                        )
+                      ) : null}
+                    </button>
+                  ) : (
+                    METRIC_LABELS[metric]
+                  )}
                 </TableHead>
               ))}
             </TableRow>
