@@ -89,92 +89,73 @@ beforeEach(async () => {
   `);
 });
 
-it("creates tags with unique names and tags phrases in bulk", async () => {
-  const created = await tags.create({
+it("adds tags by name to selected phrases, creating new ones once", async () => {
+  // Names are trimmed and matched without case; other projects' phrases
+  // are ignored.
+  await tags.applyToKeywords({
     projectId: "p1",
-    name: "  Blog   posts ",
-    color: "green",
-  });
-  // Names are trimmed, and a second tag can't take the same name.
-  await expect(
-    tags.create({ projectId: "p1", name: "blog posts", color: "red" }),
-  ).rejects.toMatchObject({ code: "CONFLICT" });
-  const priority = await tags.create({
-    projectId: "p1",
-    name: "Priority",
-    color: "red",
-  });
-
-  // Phrases of another project are ignored; adding twice changes nothing.
-  await tags.setOnKeywords({
-    projectId: "p1",
-    tagId: created.id,
     keywordIds: ["k1", "k2", "other"],
-    action: "add",
+    addTags: ["  Blog   posts ", "blog posts"],
   });
-  await tags.setOnKeywords({
+  await tags.applyToKeywords({
     projectId: "p1",
-    tagId: created.id,
     keywordIds: ["k1"],
-    action: "add",
+    addTags: ["BLOG POSTS", "Priority"],
   });
-  await tags.setOnKeywords({
-    projectId: "p1",
-    tagId: priority.id,
-    keywordIds: ["k1"],
-    action: "add",
-  });
-  expect(await tags.list("p1")).toEqual([
-    { id: created.id, name: "Blog posts", color: "green", phrases: 2 },
-    { id: priority.id, name: "Priority", color: "red", phrases: 1 },
+  const listed = await tags.list("p1");
+  expect(
+    listed.map((tag) => [tag.name, tag.normalizedName, tag.keywordCount]),
+  ).toEqual([
+    ["Blog posts", "blog posts", 2],
+    ["Priority", "priority", 1],
   ]);
+  const [blog, priority] = listed;
+  if (!blog || !priority) throw new Error("tags missing");
 
   const month = await keywords.getMonth("p1", "2026-11");
   const byQuery = new Map(month.keywords.map((k) => [k.query, k.tagIds]));
   expect(byQuery.get("shoes")).toHaveLength(2);
   expect(byQuery.get("shoes")).toEqual(
-    expect.arrayContaining([created.id, priority.id]),
+    expect.arrayContaining([blog.id, priority.id]),
   );
-  expect(byQuery.get("boots")).toEqual([created.id]);
+  expect(byQuery.get("boots")).toEqual([blog.id]);
   expect(byQuery.get("socks")).toEqual([]);
 
-  await tags.setOnKeywords({
+  await tags.applyToKeywords({
     projectId: "p1",
-    tagId: created.id,
     keywordIds: ["k1", "k2"],
-    action: "remove",
+    removeTagIds: [blog.id],
   });
-  expect((await tags.list("p1"))[0]?.phrases).toBe(0);
+  expect((await tags.list("p1"))[0]?.keywordCount).toBe(0);
 });
 
 it("renames, recolors and deletes a tag, and drops tags with the tracker", async () => {
-  const { id } = await tags.create({
+  await tags.applyToKeywords({
     projectId: "p1",
-    name: "Blog",
-    color: "blue",
-  });
-  await tags.create({ projectId: "p1", name: "Shop", color: "teal" });
-  await expect(
-    tags.update({ projectId: "p1", id, name: "shop" }),
-  ).rejects.toMatchObject({ code: "CONFLICT" });
-  await tags.update({ projectId: "p1", id, name: "Guides", color: "violet" });
-  expect((await tags.list("p1")).map((tag) => [tag.name, tag.color])).toEqual([
-    ["Guides", "violet"],
-    ["Shop", "teal"],
-  ]);
-
-  await tags.setOnKeywords({
-    projectId: "p1",
-    tagId: id,
     keywordIds: ["k1"],
-    action: "add",
+    addTags: ["Blog", "Shop"],
   });
-  await tags.remove("p1", id);
+  const [blog] = await tags.list("p1");
+  if (!blog) throw new Error("tag missing");
+  await expect(
+    tags.update({ projectId: "p1", id: blog.id, name: "shop" }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await tags.update({
+    projectId: "p1",
+    id: blog.id,
+    name: "Guides",
+    color: "violet",
+  });
+  expect(
+    (await tags.list("p1")).map((tag) => [tag.name, tag.color]),
+  ).toContainEqual(["Guides", "violet"]);
+
+  await tags.remove("p1", blog.id);
   expect((await tags.list("p1")).map((tag) => tag.name)).toEqual(["Shop"]);
   const left = await client.execute(
     "SELECT count(*) AS n FROM gsc_tracker_keyword_tags",
   );
-  expect(left.rows[0]?.n).toBe(0);
+  expect(left.rows[0]?.n).toBe(1);
 
   // Stopping tracking deletes the project's tags too.
   await tracker.remove("p1");

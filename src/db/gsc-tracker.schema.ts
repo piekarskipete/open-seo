@@ -193,8 +193,9 @@ export const gscTrackerKeywordDays = sqliteTable(
   ],
 );
 
-// Labels that group followed phrases. Each project keeps its own; the color
-// is a key from GSC_TRACKER_TAG_COLORS.
+// Labels that group followed phrases. Each project keeps its own, apart from
+// Saved Keywords tags; the color is a key from TAG_COLOR_KEYS
+// (src/shared/tag-colors.ts).
 export const gscTrackerTags = sqliteTable(
   "gsc_tracker_tags",
   {

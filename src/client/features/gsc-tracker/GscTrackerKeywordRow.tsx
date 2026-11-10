@@ -12,7 +12,7 @@ import {
   TrendCell,
 } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
 import { KeywordChartDialog } from "@/client/features/gsc-tracker/GscTrackerKeywordChart";
-import { TagChip } from "@/client/features/gsc-tracker/GscTrackerTagChip";
+import { TagChip } from "@/client/features/saved-keywords/TagChip";
 import type { Tag } from "@/client/features/gsc-tracker/gscTrackerTags";
 import type { getGscTrackerKeywords } from "@/serverFunctions/gscTracker";
 
@@ -134,7 +134,7 @@ export function KeywordRow({
               </Badge>
             ) : null}
             {tags.map((tag) => (
-              <TagChip key={tag.id} name={tag.name} color={tag.color} />
+              <TagChip key={tag.id} tag={tag} size="xs" />
             ))}
           </span>
           <span className="block truncate pl-5 text-xs text-muted-foreground">

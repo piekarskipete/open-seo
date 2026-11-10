@@ -13,7 +13,6 @@ import {
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
-import { TagManagerDialog } from "@/client/features/gsc-tracker/GscTrackerTagManager";
 import {
   Popover,
   PopoverContent,
@@ -243,94 +242,65 @@ function TrackerSettings({
   });
   // Show a choice right away while it saves.
   const pending = save.isPending ? save.variables : undefined;
-  const [open, setOpen] = useState(false);
-  const [managingTags, setManagingTags] = useState(false);
   return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          render={
-            <Button variant="outline" size="sm" aria-label="Tracker settings" />
-          }
-        >
-          <Settings className="size-3.5" />
-          Settings
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-80">
-          <PopoverHeader>
-            <PopoverTitle>Tracker settings</PopoverTitle>
-            <PopoverDescription>
-              Applies to everyone viewing this project.
-            </PopoverDescription>
-          </PopoverHeader>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span>Position format</span>
-              <SegmentedToggle
-                showLabels
-                value={pending?.positionFormat ?? positionFormat}
-                onChange={(value) => save.mutate({ positionFormat: value })}
-                items={POSITION_FORMATS.map((item) => ({
-                  ...item,
-                  icon: null,
-                }))}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              7.4 shows Search Console&apos;s average position; 7 rounds it to a
-              whole place.
-            </p>
-          </div>
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm" aria-label="Tracker settings" />
+        }
+      >
+        <Settings className="size-3.5" />
+        Settings
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80">
+        <PopoverHeader>
+          <PopoverTitle>Tracker settings</PopoverTitle>
+          <PopoverDescription>
+            Applies to everyone viewing this project.
+          </PopoverDescription>
+        </PopoverHeader>
+        <div className="space-y-1">
           <div className="flex items-center justify-between gap-3 text-sm">
-            <span>Day format</span>
+            <span>Position format</span>
             <SegmentedToggle
               showLabels
-              value={pending?.dateFormat ?? dateFormat}
-              onChange={(value) => save.mutate({ dateFormat: value })}
-              items={DATE_FORMATS.map((item) => ({ ...item, icon: null }))}
+              value={pending?.positionFormat ?? positionFormat}
+              onChange={(value) => save.mutate({ positionFormat: value })}
+              items={POSITION_FORMATS.map((item) => ({
+                ...item,
+                icon: null,
+              }))}
             />
           </div>
-          <div className="space-y-1">
-            <div className="text-sm">Query Explorer default sort</div>
-            <SegmentedToggle
-              showLabels
-              value={pending?.explorerSort ?? explorerSort}
-              onChange={(value) => save.mutate({ explorerSort: value })}
-              items={SORT_KEYS.map((item) => ({ ...item, icon: null }))}
-            />
-            <p className="text-xs text-muted-foreground">
-              How the &ldquo;All&rdquo; view opens: most clicks, impressions,
-              CTR or URLs first, or best position first. Column headers still
-              re-sort.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span>Tags</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setOpen(false);
-                  setManagingTags(true);
-                }}
-              >
-                Manage tags
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Colored labels that group phrases in the Keywords tab.
-            </p>
-          </div>
-        </PopoverContent>
-      </Popover>
-      {managingTags ? (
-        <TagManagerDialog
-          projectId={projectId}
-          onClose={() => setManagingTags(false)}
-        />
-      ) : null}
-    </>
+          <p className="text-xs text-muted-foreground">
+            7.4 shows Search Console&apos;s average position; 7 rounds it to a
+            whole place.
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span>Day format</span>
+          <SegmentedToggle
+            showLabels
+            value={pending?.dateFormat ?? dateFormat}
+            onChange={(value) => save.mutate({ dateFormat: value })}
+            items={DATE_FORMATS.map((item) => ({ ...item, icon: null }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <div className="text-sm">Query Explorer default sort</div>
+          <SegmentedToggle
+            showLabels
+            value={pending?.explorerSort ?? explorerSort}
+            onChange={(value) => save.mutate({ explorerSort: value })}
+            items={SORT_KEYS.map((item) => ({ ...item, icon: null }))}
+          />
+          <p className="text-xs text-muted-foreground">
+            How the &ldquo;All&rdquo; view opens: most clicks, impressions, CTR
+            or URLs first, or best position first. Column headers still re-sort.
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

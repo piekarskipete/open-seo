@@ -1,222 +1,170 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Tags, X } from "lucide-react";
+import { Tags } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "cn";
-import { Button } from "@/client/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/client/components/ui/dropdown-menu";
+  TableBulkActionBar,
+  TableBulkActionButton,
+} from "@/client/components/table/TableBulkActionBar";
+import { SavedKeywordsBulkTagsModal } from "@/client/features/saved-keywords/SavedKeywordsBulkTagsModal";
+import { SavedKeywordsTagFilter } from "@/client/features/saved-keywords/SavedKeywordsTagFilter";
 import {
   CheckpointsButton,
   StartDateButton,
 } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
-import { TagChip } from "@/client/features/gsc-tracker/GscTrackerTagChip";
 import {
   refreshTags,
-  TAG_COLORS,
-  tagColor,
-  UNTAGGED,
   type Tag,
 } from "@/client/features/gsc-tracker/gscTrackerTags";
-import { tagGscTrackerKeywords } from "@/serverFunctions/gscTrackerTags";
+import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import {
+  applyGscTrackerKeywordTags,
+  deleteGscTrackerTag,
+  updateGscTrackerTag,
+} from "@/serverFunctions/gscTrackerTags";
+import type { TagColorKey } from "@/shared/tag-colors";
 
-/** Tag buttons that narrow the phrase list; several chosen show any of them. */
-export function TagFilter({
+/** The tag filter, with renaming, recoloring and deleting tags, as on
+ *  Saved Keywords; these tags are the tracker's own. */
+export function KeywordTagFilter({
+  projectId,
   tags,
   value,
   onChange,
 }: {
+  projectId: string;
   tags: Tag[];
-  value: ReadonlySet<string>;
-  onChange: (next: Set<string>) => void;
+  value: string[];
+  onChange: (tagIds: string[]) => void;
 }) {
-  const toggle = (id: string) => {
-    const next = new Set(value);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    onChange(next);
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const run = async (tagId: string, action: () => Promise<unknown>) => {
+    setBusy((current) => new Set(current).add(tagId));
+    try {
+      await action();
+      refreshTags(queryClient, projectId);
+    } catch (error) {
+      toast.error(getStandardErrorMessage(error, "Could not change the tag"));
+    } finally {
+      setBusy((current) => {
+        const next = new Set(current);
+        next.delete(tagId);
+        return next;
+      });
+    }
   };
-  const options = [
-    ...tags.map((tag) => ({ id: tag.id, name: tag.name, color: tag.color })),
-    { id: UNTAGGED, name: "Untagged", color: "gray" },
-  ];
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="text-muted-foreground">Tags:</span>
-      {options.map((option) => {
-        const active = value.has(option.id);
-        return (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => toggle(option.id)}
-            className={cn(
-              "rounded-full transition-opacity",
-              active
-                ? "ring-2 ring-ring ring-offset-1 ring-offset-background"
-                : "opacity-60 hover:opacity-100",
-            )}
-          >
-            <TagChip
-              name={option.name}
-              color={option.color}
-              className={
-                option.id === UNTAGGED ? "border border-dashed" : undefined
-              }
-            />
-          </button>
+    <SavedKeywordsTagFilter
+      availableTags={tags}
+      selectedTagIds={value}
+      busyTagIds={busy}
+      onSelectedTagIdsChange={onChange}
+      onUpdateTag={(input: {
+        tagId: string;
+        name?: string;
+        color?: TagColorKey | null;
+      }) =>
+        void run(input.tagId, () =>
+          updateGscTrackerTag({
+            data: {
+              projectId,
+              tagId: input.tagId,
+              name: input.name,
+              color: input.color ?? undefined,
+            },
+          }),
+        )
+      }
+      onDeleteTag={(tagId) => {
+        onChange(value.filter((id) => id !== tagId));
+        void run(tagId, () =>
+          deleteGscTrackerTag({ data: { projectId, tagId } }),
         );
-      })}
-      {value.size > 0 ? (
-        <Button variant="ghost" size="xs" onClick={() => onChange(new Set())}>
-          <X className="size-3" />
-          Clear
-        </Button>
-      ) : null}
-    </div>
+      }}
+    />
   );
 }
 
-/** Adds a tag to, or takes it off, every selected phrase. */
-export function SelectionBar({
+/** The bar at the bottom while phrases are selected: tags, start date and
+ *  checkpoints for all of them at once. */
+export function KeywordBulkBar({
   projectId,
   selected,
   tags,
-  tagsOnSelection,
+  selectedTags,
   startDate,
   anyCustomStart,
   checkpoints,
   onClear,
-  onManageTags,
 }: {
   projectId: string;
   selected: string[];
+  tags: Tag[];
+  /** Tags at least one selected phrase carries. */
+  selectedTags: Tag[];
   /** The date the start-date picker opens on. */
   startDate: string;
   /** Whether a selected phrase has a start date set by hand. */
   anyCustomStart: boolean;
   /** The checkpoints the picker opens on. */
   checkpoints: string[];
-  tags: Tag[];
-  /** Tag ids at least one selected phrase carries. */
-  tagsOnSelection: ReadonlySet<string>;
   onClear: () => void;
-  onManageTags: () => void;
 }) {
   const queryClient = useQueryClient();
+  const [tagging, setTagging] = useState(false);
   const apply = useMutation({
-    mutationFn: (input: { tag: Tag; action: "add" | "remove" }) =>
-      tagGscTrackerKeywords({
-        data: {
-          projectId,
-          tagId: input.tag.id,
-          keywordIds: selected,
-          action: input.action,
-        },
+    mutationFn: (input: { addTags?: string[]; removeTagIds?: string[] }) =>
+      applyGscTrackerKeywordTags({
+        data: { projectId, keywordIds: selected, ...input },
       }),
-    onSuccess: (result, input) => {
-      const phrases = `${result.changed} phrase${result.changed === 1 ? "" : "s"}`;
+    onSuccess: (result) => {
       toast.success(
-        input.action === "add"
-          ? `“${input.tag.name}” added to ${phrases}`
-          : `“${input.tag.name}” removed from ${phrases}`,
+        `Tags updated on ${result.changed} phrase${result.changed === 1 ? "" : "s"}`,
       );
       refreshTags(queryClient, projectId);
+      setTagging(false);
     },
   });
-  const removable = tags.filter((tag) => tagsOnSelection.has(tag.id));
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
-      <span className="font-medium tabular-nums">
-        {selected.length} selected
-      </span>
-      <TagMenu
-        label="Add tag"
-        tags={tags}
-        disabled={apply.isPending}
-        onPick={(tag) => apply.mutate({ tag, action: "add" })}
-        onManageTags={onManageTags}
-        empty="No tags yet"
-      />
-      <TagMenu
-        label="Remove tag"
-        tags={removable}
-        disabled={apply.isPending || removable.length === 0}
-        onPick={(tag) => apply.mutate({ tag, action: "remove" })}
-      />
-      <StartDateButton
-        projectId={projectId}
-        ids={selected}
-        initialDate={startDate}
-        canReset={anyCustomStart}
-        outline
-      />
-      <CheckpointsButton
-        projectId={projectId}
-        ids={selected}
-        initial={checkpoints}
-        outline
-      />
-      <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
-        Clear selection
-      </Button>
-    </div>
-  );
-}
-
-function TagMenu({
-  label,
-  tags,
-  disabled,
-  onPick,
-  onManageTags,
-  empty,
-}: {
-  label: string;
-  tags: Tag[];
-  disabled?: boolean;
-  onPick: (tag: Tag) => void;
-  onManageTags?: () => void;
-  empty?: string;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="outline" size="sm" disabled={disabled} />}
-      >
-        <Tags className="size-3.5" />
-        {label}
-        <ChevronDown className="size-3" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-auto min-w-44">
-        {tags.length === 0 && empty ? (
-          <DropdownMenuItem disabled>{empty}</DropdownMenuItem>
-        ) : null}
-        {tags.map((tag) => (
-          <DropdownMenuItem key={tag.id} onClick={() => onPick(tag)}>
-            <span
-              className={cn(
-                "size-2.5 rounded-full",
-                TAG_COLORS[tagColor(tag.color)].swatch,
-              )}
+    <>
+      <TableBulkActionBar
+        selectedCount={selected.length}
+        onClear={onClear}
+        actions={
+          <div className="flex items-center gap-0.5 px-1.5">
+            <TableBulkActionButton
+              icon={<Tags className="size-3.5" />}
+              onClick={() => setTagging(true)}
+            >
+              Tag
+            </TableBulkActionButton>
+            <StartDateButton
+              projectId={projectId}
+              ids={selected}
+              initialDate={startDate}
+              canReset={anyCustomStart}
+              inBar
             />
-            {tag.name}
-          </DropdownMenuItem>
-        ))}
-        {onManageTags ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onManageTags}>
-              Manage tags…
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <CheckpointsButton
+              projectId={projectId}
+              ids={selected}
+              initial={checkpoints}
+              inBar
+            />
+          </div>
+        }
+      />
+      {tagging ? (
+        <SavedKeywordsBulkTagsModal
+          availableTags={tags}
+          selectedCount={selected.length}
+          selectedRowTags={selectedTags}
+          isPending={apply.isPending}
+          onClose={() => setTagging(false)}
+          onApply={(input) => apply.mutate(input)}
+        />
+      ) : null}
+    </>
   );
 }

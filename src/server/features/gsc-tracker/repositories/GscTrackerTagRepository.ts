@@ -28,13 +28,12 @@ async function list(projectId: string): Promise<GscTrackerTag[]> {
 }
 
 async function create(input: {
+  id: string;
   projectId: string;
   name: string;
   color: string;
-}): Promise<string> {
-  const id = crypto.randomUUID();
-  await db.insert(gscTrackerTags).values({ id, ...input });
-  return id;
+}): Promise<void> {
+  await db.insert(gscTrackerTags).values(input);
 }
 
 async function update(
