@@ -38,7 +38,9 @@ import { getGscTrackerQuery } from "@/serverFunctions/gscTracker";
 import type { GscTrackerRangeDays } from "@/shared/gsc-tracker";
 import {
   formatDay,
-  formatMetric,
+  formatPosition,
+  useFormatMetric,
+  usePositionFormat,
   integer,
   METRIC_LABELS,
   METRICS,
@@ -57,18 +59,25 @@ function Delta({
   current: number | null;
   previous: number | null;
 }) {
+  const positionFormat = usePositionFormat();
   if (current === null || previous === null) return null;
   const change = current - previous;
   // Changes that round to zero at display precision are not shown.
   const minimum =
-    metric === "position" ? 0.05 : metric === "ctr" ? 0.0005 : 0.5;
+    metric === "position"
+      ? positionFormat === "whole"
+        ? 0.5
+        : 0.05
+      : metric === "ctr"
+        ? 0.0005
+        : 0.5;
   if (Math.abs(change) < minimum) return null;
   const better = metric === "position" ? change < 0 : change > 0;
   const text =
     metric === "ctr"
       ? `${(Math.abs(change) * 100).toFixed(1)} pp`
       : metric === "position"
-        ? Math.abs(change).toFixed(1)
+        ? formatPosition(Math.abs(change), positionFormat)
         : integer.format(Math.abs(change));
   return (
     <span
@@ -89,6 +98,7 @@ export function StatTiles({
   current: Metrics;
   previous: Metrics;
 }) {
+  const formatMetric = useFormatMetric();
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       {METRICS.map((metric) => (
@@ -122,6 +132,7 @@ export function TrendChart({
   series: SeriesPoint[];
   initialMetric?: Metric;
 }) {
+  const formatMetric = useFormatMetric();
   const [metric, setMetric] = useState<Metric>(initialMetric);
   const config: ChartConfig = {
     [metric]: { label: METRIC_LABELS[metric], color: "var(--chart-1)" },
@@ -192,6 +203,7 @@ export function CompareTable({
   keyLabel: string;
   onSelect?: (key: string) => void;
 }) {
+  const formatMetric = useFormatMetric();
   const [shown, setShown] = useState(PAGE_SIZE);
   if (rows.length === 0)
     return (
@@ -277,6 +289,7 @@ export function QueryDetailDialog({
   days: GscTrackerRangeDays;
   onClose: () => void;
 }) {
+  const formatMetric = useFormatMetric();
   const detail = useQuery({
     queryKey: ["gscTrackerQuery", projectId, query, days],
     queryFn: () => getGscTrackerQuery({ data: { projectId, query, days } }),
@@ -336,75 +349,5 @@ export function QueryDetailDialog({
         ) : null}
       </DialogContent>
     </Dialog>
-  );
-}
-
-type CannibalQuery = {
-  query: string;
-  impressions: number;
-  clicks: number;
-  pages: (Metrics & { url: string; share: number })[];
-};
-
-export function CannibalizationList({
-  queries,
-  onSelect,
-}: {
-  queries: CannibalQuery[];
-  onSelect: (query: string) => void;
-}) {
-  if (queries.length === 0)
-    return (
-      <EmptyState
-        title="No competing pages found"
-        description="No query in this period splits its impressions between two or more of your pages."
-      />
-    );
-  return (
-    <TableCard>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Query</TableHead>
-            <TableHead>
-              Competing pages (share of impressions · position)
-            </TableHead>
-            <TableHead className="text-right">Impressions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {queries.map((item) => (
-            <TableRow key={item.query} className="align-top">
-              <TableCell className="max-w-56">
-                <button
-                  type="button"
-                  className="text-left break-all hover:underline"
-                  onClick={() => onSelect(item.query)}
-                >
-                  {item.query}
-                </button>
-              </TableCell>
-              <TableCell>
-                <ul className="space-y-1">
-                  {item.pages.map((page) => (
-                    <li key={page.url} className="text-xs">
-                      <span className="break-all">{page.url}</span>
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {Math.round(page.share * 100)}% ·{" "}
-                        {formatMetric("position", page.position)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {formatMetric("impressions", item.impressions)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableCard>
   );
 }

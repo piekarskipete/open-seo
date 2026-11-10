@@ -32,6 +32,8 @@ export const gscTrackerProjects = sqliteTable(
     lastSyncedAt: text("last_synced_at"),
     lastError: text("last_error"),
     enabledByUserId: text("enabled_by_user_id").notNull(),
+    // How positions are shown: "decimal" (7.4) or "whole" (7).
+    positionFormat: text("position_format").notNull().default("decimal"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -124,5 +126,57 @@ export const gscTrackerTotals = sqliteTable(
   },
   (table) => [
     uniqueIndex("gsc_tracker_totals_day_idx").on(table.projectId, table.date),
+  ],
+);
+
+// Phrases the project follows, each with the URL that should rank for it.
+// Stored lowercased, as Search Console reports queries.
+export const gscTrackerKeywords = sqliteTable(
+  "gsc_tracker_keywords",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    query: text("query").notNull(),
+    targetUrl: text("target_url").notNull(),
+    // The fetched day range, both ends inclusive; null until the first day.
+    oldestDate: text("oldest_date"),
+    newestDate: text("newest_date"),
+    lastSyncedAt: text("last_synced_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [
+    uniqueIndex("gsc_tracker_keywords_project_query_idx").on(
+      table.projectId,
+      table.query,
+    ),
+  ],
+);
+
+// One day of a followed phrase on one page: every page Search Console showed
+// for the phrase that day, so competing pages can be compared.
+export const gscTrackerKeywordDays = sqliteTable(
+  "gsc_tracker_keyword_days",
+  {
+    keywordId: text("keyword_id")
+      .notNull()
+      .references(() => gscTrackerKeywords.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    pageId: integer("page_id")
+      .notNull()
+      .references(() => gscTrackerPages.id, { onDelete: "cascade" }),
+    clicks: integer("clicks").notNull(),
+    impressions: integer("impressions").notNull(),
+    position: real("position").notNull(),
+  },
+  (table) => [
+    uniqueIndex("gsc_tracker_keyword_days_idx").on(
+      table.keywordId,
+      table.date,
+      table.pageId,
+    ),
   ],
 );

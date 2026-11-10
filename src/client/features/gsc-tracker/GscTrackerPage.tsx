@@ -13,17 +13,19 @@ import {
   TrackerStatus,
 } from "@/client/features/gsc-tracker/GscTrackerSetup";
 import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
+import { CannibalizationList } from "@/client/features/gsc-tracker/GscTrackerCannibalization";
 import {
-  CannibalizationList,
   CompareTable,
   QueryDetailDialog,
   StatTiles,
   TrendChart,
 } from "@/client/features/gsc-tracker/GscTrackerParts";
+import { KeywordsTab } from "@/client/features/gsc-tracker/GscTrackerKeywords";
 import {
   applyListFilter,
   formatDay,
   LIST_FILTERS,
+  PositionFormatContext,
   type ListFilter,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import {
@@ -48,6 +50,7 @@ const RANGES: { days: GscTrackerRangeDays; label: string }[] = [
 ];
 
 const TAB_LABELS: Record<GscTrackerTab, string> = {
+  keywords: "Keywords",
   overview: "Overview",
   queries: "Queries",
   pages: "Pages",
@@ -83,7 +86,7 @@ export function GscTrackerPage({
       <div className="mx-auto max-w-7xl space-y-4">
         <PageHeader
           title="GSC Tracker"
-          description="Your Search Console history, stored in OpenSEO: up to 16 months of trends for queries and pages."
+          description="Follow phrases day by day on the URL that should rank, and keep up to 16 months of Search Console history."
         />
         {status.isPending ? (
           <Skeleton className="h-40 w-full" />
@@ -116,12 +119,17 @@ export function GscTrackerPage({
           <>
             <TrackerStatus projectId={projectId} status={status.data} />
             {status.data.newestDate ? (
-              <TrackerReport
-                projectId={projectId}
-                tab={tab}
-                days={days}
-                onChange={onChange}
-              />
+              <PositionFormatContext.Provider
+                value={status.data.positionFormat}
+              >
+                <TrackerReport
+                  projectId={projectId}
+                  canManage={status.data.canManage}
+                  tab={tab}
+                  days={days}
+                  onChange={onChange}
+                />
+              </PositionFormatContext.Provider>
             ) : (
               <EmptyState
                 icon={History}
@@ -138,11 +146,13 @@ export function GscTrackerPage({
 
 function TrackerReport({
   projectId,
+  canManage,
   tab,
   days,
   onChange,
 }: {
   projectId: string;
+  canManage: boolean;
   tab: GscTrackerTab;
   days: GscTrackerRangeDays;
   onChange: (update: {
@@ -166,21 +176,26 @@ function TrackerReport({
             ))}
           </TabsList>
         </Tabs>
-        <SegmentedToggle
-          showLabels
-          value={`${days}`}
-          onChange={(value) => {
-            const picked = RANGES.find((range) => `${range.days}` === value);
-            if (picked) onChange({ days: picked.days });
-          }}
-          items={RANGES.map((range) => ({
-            value: `${range.days}`,
-            label: range.label,
-            icon: null,
-          }))}
-        />
+        {/* Followed phrases pick a month instead of a window. */}
+        {tab === "keywords" ? null : (
+          <SegmentedToggle
+            showLabels
+            value={`${days}`}
+            onChange={(value) => {
+              const picked = RANGES.find((range) => `${range.days}` === value);
+              if (picked) onChange({ days: picked.days });
+            }}
+            items={RANGES.map((range) => ({
+              value: `${range.days}`,
+              label: range.label,
+              icon: null,
+            }))}
+          />
+        )}
       </div>
-      {tab === "overview" ? (
+      {tab === "keywords" ? (
+        <KeywordsTab projectId={projectId} canManage={canManage} />
+      ) : tab === "overview" ? (
         <OverviewTab projectId={projectId} days={days} />
       ) : tab === "cannibalization" ? (
         <CannibalizationTab

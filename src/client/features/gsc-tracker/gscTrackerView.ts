@@ -1,6 +1,9 @@
 // Formatting and list logic for the GSC Tracker page, kept apart from the
 // components so the component modules only export components.
 
+import { createContext, useContext } from "react";
+import type { GscTrackerPositionFormat } from "@/shared/gsc-tracker";
+
 export type Metrics = {
   clicks: number;
   impressions: number;
@@ -23,11 +26,40 @@ export const METRIC_LABELS: Record<Metric, string> = {
 
 export const integer = new Intl.NumberFormat("en-US");
 
-export function formatMetric(metric: Metric, value: number | null): string {
+/** The project's position format, set by the tracker page. */
+export const PositionFormatContext =
+  createContext<GscTrackerPositionFormat>("decimal");
+
+export function usePositionFormat(): GscTrackerPositionFormat {
+  return useContext(PositionFormatContext);
+}
+
+/** A position as the project shows it: 7.4, or 7 when set to whole numbers. */
+export function formatPosition(
+  value: number,
+  positionFormat: GscTrackerPositionFormat,
+): string {
+  return positionFormat === "whole"
+    ? String(Math.round(value))
+    : value.toFixed(1);
+}
+
+export function formatMetric(
+  metric: Metric,
+  value: number | null,
+  positionFormat: GscTrackerPositionFormat = "decimal",
+): string {
   if (value === null) return "–";
   if (metric === "ctr") return `${(value * 100).toFixed(1)}%`;
-  if (metric === "position") return value.toFixed(1);
+  if (metric === "position") return formatPosition(value, positionFormat);
   return integer.format(value);
+}
+
+/** formatMetric bound to the project's position format. */
+export function useFormatMetric() {
+  const positionFormat = usePositionFormat();
+  return (metric: Metric, value: number | null) =>
+    formatMetric(metric, value, positionFormat);
 }
 
 export function formatDay(date: string): string {

@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { runBatch } from "@/db/runBatch";
 import type * as ServiceModule from "./GscTrackerService";
+import type * as KeywordModule from "./GscTrackerKeywordService";
 
 type Row = {
   keys: string[];
@@ -34,10 +35,13 @@ vi.mock("@/server/features/google/googleAccess", () => ({
 let client: Client;
 const directory = mkdtempSync(join(tmpdir(), "gsc-tracker-"));
 let service: typeof ServiceModule.GscTrackerService;
+let keywords: typeof KeywordModule.GscTrackerKeywordService;
 type Build = Parameters<typeof runBatch>[0];
 
 // What Search Console "returns" per day, by query and page.
 let dayRows: (date: string) => Row[] = () => [];
+// What it returns for the followed-phrase request of a day.
+let phraseRows: (date: string) => Row[] = () => [];
 
 beforeAll(async () => {
   client = createClient({ url: `file:${join(directory, "test.db")}` });
@@ -59,12 +63,16 @@ beforeAll(async () => {
     INSERT INTO organization VALUES ('org1');
     INSERT INTO projects VALUES ('p1');
   `);
-  await client.executeMultiple(
-    readFileSync("drizzle/sqlite/0069_gsc_tracker.sql", "utf8")
-      .split("--> statement-breakpoint")
-      .join("\n"),
-  );
+  for (const file of [
+    "drizzle/sqlite/0069_gsc_tracker.sql",
+    "drizzle/sqlite/0070_gsc_tracker_keywords.sql",
+  ])
+    await client.executeMultiple(
+      readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
+    );
   ({ GscTrackerService: service } = await import("./GscTrackerService"));
+  ({ GscTrackerKeywordService: keywords } =
+    await import("./GscTrackerKeywordService"));
 });
 
 afterAll(() => {
@@ -74,7 +82,7 @@ afterAll(() => {
 
 beforeEach(async () => {
   await client.executeMultiple(
-    "DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_projects;",
+    "DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_projects;",
   );
   gsc.getConnection.mockResolvedValue({ siteUrl: "sc-domain:example.com" });
   gsc.getPerformance.mockImplementation(
@@ -82,7 +90,9 @@ beforeEach(async () => {
       startDate: string;
       endDate: string;
       dimensions: string[];
+      regexFilters?: unknown[];
     }) => {
+      if (input.regexFilters) return { rows: phraseRows(input.startDate) };
       if (input.dimensions[0] === "date") {
         // Totals: one row per day of the batch.
         const rows: Row[] = [];
@@ -235,6 +245,55 @@ it("starts the history over when the project switches property", async () => {
       dimension: "query",
     });
     expect(list?.rows).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("follows a phrase day by day and marks pages that beat its target", async () => {
+  vi.useFakeTimers({ now: new Date("2026-11-10T12:00:00Z"), toFake: ["Date"] });
+  try {
+    dayRows = () => [];
+    // The target ranks every day; another page takes more impressions on the
+    // last two days.
+    phraseRows = (date) => [
+      {
+        keys: ["running shoes", "https://x/a/"],
+        clicks: 1,
+        impressions: 10,
+        position: 3.4,
+      },
+      {
+        keys: ["running shoes", "https://x/b"],
+        clicks: 0,
+        impressions: date >= "2026-11-07" ? 30 : 5,
+        position: 8,
+      },
+    ];
+    await service.enable({
+      projectId: "p1",
+      organizationId: "org1",
+      userId: "u1",
+    });
+    // Typed by hand: mixed case, extra space, no trailing slash.
+    await keywords.add("p1", [
+      { query: "Running  Shoes", targetUrl: "https://x/a" },
+    ]);
+
+    const month = await keywords.getMonth("p1", "2026-11");
+    const [phrase] = month.keywords;
+    expect(phrase?.query).toBe("running shoes");
+    // One request per day, recent days first: 11-01 to 11-08 in the first batch.
+    expect(Object.keys(phrase?.pages[0]?.days ?? {})).toHaveLength(8);
+    expect(
+      phrase?.pages.map((page) => [page.url, page.isTarget, page.stronger]),
+    ).toEqual([
+      ["https://x/a/", true, false],
+      ["https://x/b", false, true],
+    ]);
+    expect(phrase?.pages[0]?.days["2026-11-08"]?.position).toBe(3.4);
+    expect(phrase?.cannibalized).toBe(true);
+    expect(phrase?.outrankedDays).toEqual(["2026-11-07", "2026-11-08"]);
   } finally {
     vi.useRealTimers();
   }
