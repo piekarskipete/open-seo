@@ -15,7 +15,13 @@ export type Metrics = {
   position: number | null;
 };
 
-export type CompareRow = { key: string; current: Metrics; previous: Metrics };
+export type CompareRow = {
+  key: string;
+  /** Pages the query reached in the current period (Query Explorer only). */
+  urls?: number;
+  current: Metrics;
+  previous: Metrics;
+};
 
 export type Metric = "clicks" | "impressions" | "ctr" | "position";
 
@@ -187,8 +193,8 @@ export function sortRows(rows: CompareRow[], sort: SortState): CompareRow[] {
   const sign = sort.dir === "asc" ? 1 : -1;
   const sorted = [...rows];
   sorted.sort((a, b) => {
-    const left = a.current[sort.key];
-    const right = b.current[sort.key];
+    const left = sort.key === "urls" ? (a.urls ?? null) : a.current[sort.key];
+    const right = sort.key === "urls" ? (b.urls ?? null) : b.current[sort.key];
     if (left === null || right === null)
       return (left === null ? 1 : 0) - (right === null ? 1 : 0);
     return (left - right) * sign;

@@ -1,13 +1,4 @@
-import {
-  and,
-  desc,
-  eq,
-  gte,
-  inArray,
-  lte,
-  sql,
-  type SQLWrapper,
-} from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   gscTrackerPages,
@@ -27,6 +18,7 @@ import {
 } from "./gscTrackerDates";
 import { syncTracker } from "./GscTrackerSyncService";
 import { metrics, periods } from "./gscTrackerWindows";
+import { compareQueries } from "./gscTrackerExplorer";
 import { syncKeywords } from "./gscTrackerKeywordSync";
 import {
   GSC_TRACKER_SORT_KEYS,
@@ -41,8 +33,6 @@ import {
  * dashboard's short cache is a privacy-policy decision for the hosted service.
  */
 
-// Rows a list returns. The client filters and sorts within them.
-const LIST_LIMIT = 1000;
 // A query counts as cannibalized when a second page earns at least this share
 // of its impressions, and the query has at least this many.
 const CANNIBAL_MIN_SHARE = 0.1;
@@ -195,77 +185,6 @@ async function getOverview(projectId: string, days: number) {
         ctr: day.impressions > 0 ? day.clicks / day.impressions : 0,
         position: day.position,
       })),
-  };
-}
-
-/**
- * Sums of the current and previous windows per query. With `page`, only the
- * rows of pages whose URL contains it count, so the list shows every query a
- * page earns and that page's numbers for it.
- */
-async function compareQueries(input: {
-  projectId: string;
-  days: number;
-  search?: string;
-  page?: string;
-}) {
-  const range = await periods(input.projectId, input.days);
-  if (!range) return null;
-  const r = gscTrackerRows;
-  const inCurrent = sql`${r.date} >= ${range.currentStart}`;
-  const current = (value: SQLWrapper) =>
-    sql<number>`sum(case when ${inCurrent} then ${value} else 0 end)`.mapWith(
-      Number,
-    );
-  const previous = (value: SQLWrapper) =>
-    sql<number>`sum(case when ${inCurrent} then 0 else ${value} end)`.mapWith(
-      Number,
-    );
-  const weight = sql`${r.position} * ${r.impressions}`;
-  const search = input.search?.trim().toLowerCase();
-  const page = input.page?.trim().toLowerCase();
-
-  const rows = await db
-    .select({
-      key: gscTrackerQueries.query,
-      clicks: current(r.clicks),
-      impressions: current(r.impressions),
-      weight: current(weight),
-      previousClicks: previous(r.clicks),
-      previousImpressions: previous(r.impressions),
-      previousWeight: previous(weight),
-    })
-    .from(r)
-    .innerJoin(gscTrackerQueries, eq(gscTrackerQueries.id, r.queryId))
-    .innerJoin(gscTrackerPages, eq(gscTrackerPages.id, r.pageId))
-    .where(
-      and(
-        eq(r.projectId, input.projectId),
-        gte(r.date, range.previousStart),
-        lte(r.date, range.currentEnd),
-        search
-          ? sql`lower(${gscTrackerQueries.query}) like ${`%${search}%`}`
-          : undefined,
-        page
-          ? sql`lower(${gscTrackerPages.url}) like ${`%${page}%`}`
-          : undefined,
-      ),
-    )
-    .groupBy(gscTrackerQueries.id, gscTrackerQueries.query)
-    .orderBy(desc(sql`sum(${r.impressions})`))
-    .limit(LIST_LIMIT);
-
-  return {
-    ...range,
-    rows: rows.map((row) => ({
-      key: row.key,
-      current: metrics(row.clicks, row.impressions, row.weight),
-      previous: metrics(
-        row.previousClicks,
-        row.previousImpressions,
-        row.previousWeight,
-      ),
-    })),
   };
 }
 

@@ -24,6 +24,7 @@ export const GSC_TRACKER_SORT_KEYS = [
   "impressions",
   "ctr",
   "position",
+  "urls",
 ] as const;
 
 export type GscTrackerSortKey = (typeof GSC_TRACKER_SORT_KEYS)[number];
