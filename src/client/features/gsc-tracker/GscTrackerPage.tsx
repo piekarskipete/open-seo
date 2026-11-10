@@ -1,10 +1,9 @@
-import { useDeferredValue, useState } from "react";
+import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/client/components/EmptyState";
 import { PageHeader } from "@/client/components/PageHeader";
 import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
-import { Input } from "@/client/components/ui/input";
 import { Skeleton } from "@/client/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/client/components/ui/tabs";
 import { History } from "lucide-react";
@@ -15,22 +14,18 @@ import {
 import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
 import { CannibalizationList } from "@/client/features/gsc-tracker/GscTrackerCannibalization";
 import {
-  CompareTable,
   QueryDetailDialog,
   StatTiles,
   TrendChart,
 } from "@/client/features/gsc-tracker/GscTrackerParts";
 import { KeywordsTab } from "@/client/features/gsc-tracker/GscTrackerKeywords";
+import { ExplorerTab } from "@/client/features/gsc-tracker/GscTrackerExplorer";
 import {
-  applyListFilter,
   formatDay,
-  LIST_FILTERS,
   PositionFormatContext,
-  type ListFilter,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import {
   getGscTrackerCannibalization,
-  getGscTrackerList,
   getGscTrackerOverview,
   getGscTrackerStatus,
 } from "@/serverFunctions/gscTracker";
@@ -51,9 +46,8 @@ const RANGES: { days: GscTrackerRangeDays; label: string }[] = [
 
 const TAB_LABELS: Record<GscTrackerTab, string> = {
   keywords: "Keywords",
+  explorer: "Query explorer",
   overview: "Overview",
-  queries: "Queries",
-  pages: "Pages",
   cannibalization: "Cannibalization",
 };
 
@@ -204,17 +198,16 @@ function TrackerReport({
           onSelect={setSelectedQuery}
         />
       ) : (
-        <ListTab
-          key={tab}
+        <ExplorerTab
           projectId={projectId}
           days={days}
-          dimension={tab === "pages" ? "page" : "query"}
-          onSelect={tab === "queries" ? setSelectedQuery : undefined}
+          onSelect={setSelectedQuery}
         />
       )}
       {selectedQuery ? (
         <QueryDetailDialog
           projectId={projectId}
+          canManage={canManage}
           query={selectedQuery}
           days={days}
           onClose={() => setSelectedQuery(null)}
@@ -261,73 +254,6 @@ function OverviewTab({
         {formatDay(overview.data.previousEnd)}. Totals include anonymized
         queries.
       </p>
-    </div>
-  );
-}
-
-function ListTab({
-  projectId,
-  days,
-  dimension,
-  onSelect,
-}: {
-  projectId: string;
-  days: GscTrackerRangeDays;
-  dimension: "query" | "page";
-  onSelect?: (key: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<ListFilter>("all");
-  const deferredSearch = useDeferredValue(search.trim());
-  const list = useQuery({
-    queryKey: ["gscTrackerList", projectId, dimension, days, deferredSearch],
-    queryFn: () =>
-      getGscTrackerList({
-        data: {
-          projectId,
-          days,
-          dimension,
-          search: deferredSearch || undefined,
-        },
-      }),
-    placeholderData: keepPreviousData,
-  });
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={
-            dimension === "query" ? "Filter queries" : "Filter pages"
-          }
-          aria-label={dimension === "query" ? "Filter queries" : "Filter pages"}
-          className="max-w-xs"
-        />
-        <SegmentedToggle
-          showLabels
-          value={filter}
-          onChange={setFilter}
-          items={LIST_FILTERS.map((item) => ({ ...item, icon: null }))}
-        />
-      </div>
-      {list.isPending ? (
-        <Skeleton className="h-80 w-full" />
-      ) : list.isError ? (
-        <QueryError
-          error={list.error}
-          fallback="Couldn't load the list."
-          onRetry={() => void list.refetch()}
-          isRetrying={list.isFetching}
-        />
-      ) : list.data ? (
-        <CompareTable
-          key={`${filter}-${deferredSearch}`}
-          rows={applyListFilter(list.data.rows, filter)}
-          keyLabel={dimension === "query" ? "Query" : "Page"}
-          onSelect={onSelect}
-        />
-      ) : null}
     </div>
   );
 }

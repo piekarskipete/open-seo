@@ -7,29 +7,13 @@ import {
   gscTrackerLatestDay,
 } from "./gscTrackerDates";
 import { syncKeywords } from "./gscTrackerKeywordSync";
+import { comparableUrl, normalizeQuery } from "@/shared/gsc-tracker";
 
 // Followed phrases per project. Each costs a share of one Search Console
 // request per day, so the cap is about keeping the page readable.
 const MAX_KEYWORDS = 1000;
 
 type DayMetrics = { position: number; clicks: number; impressions: number };
-
-/** Search Console reports queries lowercased with single spaces. */
-export function normalizeQuery(query: string): string {
-  return query.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-/** A URL reduced to what decides "the same page": no scheme, "www.",
- *  fragment or trailing slash, so a target typed by hand still matches. */
-export function comparableUrl(url: string): string {
-  return url
-    .trim()
-    .toLowerCase()
-    .replace(/#.*$/, "")
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/+$/, "");
-}
 
 /** The months that hold stored days: Google's 16 months up to the latest day. */
 function availableMonths(now: Date): string[] {
@@ -181,8 +165,22 @@ async function add(
   return { added, updated: unique.size - added };
 }
 
+/** Every followed phrase with its target, to show which pages are tracked. */
+async function listTargets(projectId: string) {
+  const keywords = await GscTrackerKeywordRepository.list(projectId);
+  return keywords.map((keyword) => ({
+    query: keyword.query,
+    targetUrl: keyword.targetUrl,
+  }));
+}
+
 async function remove(projectId: string, id: string) {
   await GscTrackerKeywordRepository.remove(projectId, id);
 }
 
-export const GscTrackerKeywordService = { getMonth, add, remove };
+export const GscTrackerKeywordService = {
+  getMonth,
+  add,
+  listTargets,
+  remove,
+};
