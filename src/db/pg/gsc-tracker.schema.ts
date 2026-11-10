@@ -139,9 +139,11 @@ export const gscTrackerKeywords = pgTable(
     createdAt: text("created_at").notNull().default(isoNow),
   },
   (table) => [
-    uniqueIndex("gsc_tracker_keywords_project_query_idx").on(
+    // A phrase can be followed for several target URLs, each its own entry.
+    uniqueIndex("gsc_tracker_keywords_project_query_target_idx").on(
       table.projectId,
       table.query,
+      table.targetUrl,
     ),
   ],
 );

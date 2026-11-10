@@ -67,6 +67,7 @@ beforeAll(async () => {
     "drizzle/sqlite/0069_gsc_tracker.sql",
     "drizzle/sqlite/0071_gsc_tracker_keywords.sql",
     "drizzle/sqlite/0072_gsc_tracker_explorer_sort.sql",
+    "drizzle/sqlite/0073_gsc_tracker_keyword_targets.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
@@ -305,6 +306,56 @@ it("follows a phrase day by day and marks pages that beat its target", async () 
     expect(phrase?.pages[0]?.days["2026-11-08"]?.position).toBe(3.4);
     expect(phrase?.cannibalized).toBe(true);
     expect(phrase?.outrankedDays).toEqual(["2026-11-07", "2026-11-08"]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("follows one phrase for two URLs as two entries, each with the day's pages", async () => {
+  vi.useFakeTimers({ now: new Date("2026-11-10T12:00:00Z"), toFake: ["Date"] });
+  try {
+    dayRows = () => [];
+    phraseRows = () => [
+      {
+        keys: ["rebusy", "https://x/a/"],
+        clicks: 2,
+        impressions: 20,
+        position: 2,
+      },
+      {
+        keys: ["rebusy", "https://x/b/"],
+        clicks: 1,
+        impressions: 10,
+        position: 6,
+      },
+    ];
+    await service.enable({
+      projectId: "p1",
+      organizationId: "org1",
+      userId: "u1",
+    });
+    const first = await keywords.add("p1", [
+      { query: "rebusy", targetUrl: "https://x/a/" },
+      { query: "rebusy", targetUrl: "https://x/b/" },
+    ]);
+    expect(first).toEqual({ added: 2, skipped: 0 });
+    // The same pair again, typed differently, is already followed.
+    const again = await keywords.add("p1", [
+      { query: "Rebusy", targetUrl: "http://www.x/a" },
+    ]);
+    expect(again).toEqual({ added: 0, skipped: 1 });
+
+    const month = await keywords.getMonth("p1", "2026-11");
+    expect(
+      month.keywords.map((phrase) => [
+        phrase.targetUrl,
+        phrase.pages.find((page) => page.isTarget)?.position,
+        phrase.cannibalized,
+      ]),
+    ).toEqual([
+      ["https://x/a/", 2, false],
+      ["https://x/b/", 6, true],
+    ]);
   } finally {
     vi.useRealTimers();
   }

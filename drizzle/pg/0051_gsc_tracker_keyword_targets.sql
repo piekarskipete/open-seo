@@ -1,0 +1,2 @@
+DROP INDEX "gsc_tracker_keywords_project_query_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "gsc_tracker_keywords_project_query_target_idx" ON "gsc_tracker_keywords" USING btree ("project_id","query","target_url");

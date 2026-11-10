@@ -94,7 +94,13 @@ export function planKeywordDays(
 
 async function fetchDay(projectId: string, batch: DayBatch) {
   for (const group of patternGroups(batch.keywords)) {
-    const byQuery = new Map(group.map((keyword) => [keyword.query, keyword]));
+    // One phrase may be followed for several URLs: its rows go to each.
+    const byQuery = new Map<string, GscTrackerKeyword[]>();
+    for (const keyword of group)
+      byQuery.set(keyword.query, [
+        ...(byQuery.get(keyword.query) ?? []),
+        keyword,
+      ]);
     const { rows } = await GscService.getPerformance({
       projectId,
       startDate: batch.date,
@@ -103,7 +109,7 @@ async function fetchDay(projectId: string, batch: DayBatch) {
       regexFilters: [
         {
           dimension: "query",
-          expression: exactQueryPattern(group.map((keyword) => keyword.query)),
+          expression: exactQueryPattern([...byQuery.keys()]),
         },
       ],
       rowLimit: ROW_LIMIT,
@@ -114,17 +120,14 @@ async function fetchDay(projectId: string, batch: DayBatch) {
       date: batch.date,
       rows: rows.flatMap((row) => {
         const [query, page] = row.keys ?? [];
-        const keyword = query ? byQuery.get(query) : undefined;
-        if (!keyword || !page) return [];
-        return [
-          {
-            keywordId: keyword.id,
-            page,
-            clicks: row.clicks,
-            impressions: row.impressions,
-            position: row.position,
-          },
-        ];
+        if (!query || !page) return [];
+        return (byQuery.get(query) ?? []).map((keyword) => ({
+          keywordId: keyword.id,
+          page,
+          clicks: row.clicks,
+          impressions: row.impressions,
+          position: row.position,
+        }));
       }),
     });
   }
