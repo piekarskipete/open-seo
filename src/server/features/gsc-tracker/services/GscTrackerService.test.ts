@@ -171,10 +171,9 @@ it("stores synced days and compares the current window with the previous one", a
       lastError: null,
     });
 
-    const list = await service.compareBy({
+    const list = await service.compareQueries({
       projectId: "p1",
       days: 7,
-      dimension: "query",
     });
     const byKey = new Map(list?.rows.map((row) => [row.key, row]));
     // 7-day window 11-02..11-08 holds every stored day; the previous is empty.
@@ -188,11 +187,23 @@ it("stores synced days and compares the current window with the previous one", a
     );
     expect(byKey.get("socks")?.current.clicks).toBe(6);
 
+    // Filtered by URL: only the queries page b earns, with page b's numbers.
+    const forPage = await service.compareQueries({
+      projectId: "p1",
+      days: 7,
+      page: "X/B",
+    });
+    expect(forPage?.rows.map((row) => row.key)).toEqual(["shoes"]);
+    expect(forPage?.rows[0]?.current).toMatchObject({
+      clicks: 1 * 4,
+      impressions: 10 * 4,
+      position: 8,
+    });
+
     // 3 days: 11-06..11-08 against 11-03..11-05. "socks" is lost.
-    const short = await service.compareBy({
+    const short = await service.compareQueries({
       projectId: "p1",
       days: 3,
-      dimension: "query",
     });
     const socks = short?.rows.find((row) => row.key === "socks");
     expect(socks?.current.clicks).toBe(0);
@@ -239,10 +250,9 @@ it("starts the history over when the project switches property", async () => {
 
     const status = await service.getStatus("p1");
     expect(status.siteUrl).toBe("https://other.example/");
-    const list = await service.compareBy({
+    const list = await service.compareQueries({
       projectId: "p1",
       days: 28,
-      dimension: "query",
     });
     expect(list?.rows).toEqual([]);
   } finally {

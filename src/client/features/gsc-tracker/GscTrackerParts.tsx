@@ -35,6 +35,7 @@ import {
   TableRow,
 } from "@/client/components/ui/table";
 import { getGscTrackerQuery } from "@/serverFunctions/gscTracker";
+import { TrackPageButton } from "@/client/features/gsc-tracker/GscTrackerTrackButton";
 import type { GscTrackerRangeDays } from "@/shared/gsc-tracker";
 import {
   formatDay,
@@ -280,11 +281,14 @@ export function CompareTable({
 /** One query's daily position and clicks, and the pages that rank for it. */
 export function QueryDetailDialog({
   projectId,
+  canManage,
   query,
   days,
   onClose,
 }: {
   projectId: string;
+  /** Members who manage integrations can add a page to the tracker. */
+  canManage: boolean;
   query: string;
   days: GscTrackerRangeDays;
   onClose: () => void;
@@ -300,7 +304,8 @@ export function QueryDetailDialog({
         <DialogHeader>
           <DialogTitle className="break-all">{query}</DialogTitle>
           <DialogDescription>
-            Daily position and the pages that rank for this query.
+            Daily position and the pages that rank for this query. Add a page to
+            the tracker to follow the query with that page as its target.
           </DialogDescription>
         </DialogHeader>
         {detail.isPending ? (
@@ -323,6 +328,7 @@ export function QueryDetailDialog({
                     <TableHead className="text-right">Clicks</TableHead>
                     <TableHead className="text-right">Impressions</TableHead>
                     <TableHead className="text-right">Position</TableHead>
+                    {canManage ? <TableHead /> : null}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -340,6 +346,15 @@ export function QueryDetailDialog({
                       <TableCell className="text-right tabular-nums">
                         {formatMetric("position", page.position)}
                       </TableCell>
+                      {canManage ? (
+                        <TableCell className="text-right">
+                          <TrackPageButton
+                            projectId={projectId}
+                            query={query}
+                            url={page.url}
+                          />
+                        </TableCell>
+                      ) : null}
                     </TableRow>
                   ))}
                 </TableBody>

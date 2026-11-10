@@ -216,12 +216,16 @@ async function getOverview(projectId: string, days: number) {
   };
 }
 
-/** Sums of the current and previous windows, per query or per page. */
-async function compareBy(input: {
+/**
+ * Sums of the current and previous windows per query. With `page`, only the
+ * rows of pages whose URL contains it count, so the list shows every query a
+ * page earns and that page's numbers for it.
+ */
+async function compareQueries(input: {
   projectId: string;
   days: number;
-  dimension: "query" | "page";
   search?: string;
+  page?: string;
 }) {
   const range = await periods(input.projectId, input.days);
   if (!range) return null;
@@ -236,19 +240,12 @@ async function compareBy(input: {
       Number,
     );
   const weight = sql`${r.position} * ${r.impressions}`;
-  const keyTable =
-    input.dimension === "query" ? gscTrackerQueries : gscTrackerPages;
-  const keyColumn =
-    input.dimension === "query" ? gscTrackerQueries.query : gscTrackerPages.url;
-  const joinOn =
-    input.dimension === "query"
-      ? eq(gscTrackerQueries.id, r.queryId)
-      : eq(gscTrackerPages.id, r.pageId);
   const search = input.search?.trim().toLowerCase();
+  const page = input.page?.trim().toLowerCase();
 
   const rows = await db
     .select({
-      key: keyColumn,
+      key: gscTrackerQueries.query,
       clicks: current(r.clicks),
       impressions: current(r.impressions),
       weight: current(weight),
@@ -257,16 +254,22 @@ async function compareBy(input: {
       previousWeight: previous(weight),
     })
     .from(r)
-    .innerJoin(keyTable, joinOn)
+    .innerJoin(gscTrackerQueries, eq(gscTrackerQueries.id, r.queryId))
+    .innerJoin(gscTrackerPages, eq(gscTrackerPages.id, r.pageId))
     .where(
       and(
         eq(r.projectId, input.projectId),
         gte(r.date, range.previousStart),
         lte(r.date, range.currentEnd),
-        search ? sql`lower(${keyColumn}) like ${`%${search}%`}` : undefined,
+        search
+          ? sql`lower(${gscTrackerQueries.query}) like ${`%${search}%`}`
+          : undefined,
+        page
+          ? sql`lower(${gscTrackerPages.url}) like ${`%${page}%`}`
+          : undefined,
       ),
     )
-    .groupBy(keyTable.id, keyColumn)
+    .groupBy(gscTrackerQueries.id, gscTrackerQueries.query)
     .orderBy(desc(sql`sum(${r.impressions})`))
     .limit(LIST_LIMIT);
 
@@ -427,7 +430,7 @@ export const GscTrackerService = {
   setPositionFormat,
   disable,
   getOverview,
-  compareBy,
+  compareQueries,
   getQueryDetail,
   getCannibalization,
 };

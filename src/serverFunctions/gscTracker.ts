@@ -15,8 +15,8 @@ const rangeSchema = projectSchema.extend({
   days: z.union(GSC_TRACKER_RANGE_DAYS.map((days) => z.literal(days))),
 });
 const listSchema = rangeSchema.extend({
-  dimension: z.enum(["query", "page"]),
   search: z.string().max(200).optional(),
+  page: z.string().max(2048).optional(),
 });
 const querySchema = rangeSchema.extend({ query: z.string().min(1).max(500) });
 const monthSchema = projectSchema.extend({
@@ -88,11 +88,11 @@ export const getGscTrackerList = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(listSchema)
   .handler(({ data, context }) =>
-    GscTrackerService.compareBy({
+    GscTrackerService.compareQueries({
       projectId: context.projectId,
       days: data.days,
-      dimension: data.dimension,
       search: data.search,
+      page: data.page,
     }),
   );
 
@@ -149,3 +149,10 @@ export const setGscTrackerPositionFormat = createServerFn({ method: "POST" })
     );
     return { positionFormat: data.positionFormat };
   });
+
+export const listGscTrackerTargets = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(projectSchema)
+  .handler(({ context }) =>
+    GscTrackerKeywordService.listTargets(context.projectId),
+  );

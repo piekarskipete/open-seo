@@ -5,9 +5,8 @@ export type GscTrackerRangeDays = (typeof GSC_TRACKER_RANGE_DAYS)[number];
 
 export const GSC_TRACKER_TABS = [
   "keywords",
+  "explorer",
   "overview",
-  "queries",
-  "pages",
   "cannibalization",
 ] as const;
 
@@ -18,3 +17,20 @@ export const GSC_TRACKER_POSITION_FORMATS = ["decimal", "whole"] as const;
 
 export type GscTrackerPositionFormat =
   (typeof GSC_TRACKER_POSITION_FORMATS)[number];
+
+/** Search Console reports queries lowercased with single spaces. */
+export function normalizeQuery(query: string): string {
+  return query.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** A URL reduced to what decides "the same page": no scheme, "www.",
+ *  fragment or trailing slash, so a target typed by hand still matches. */
+export function comparableUrl(url: string): string {
+  return url
+    .trim()
+    .toLowerCase()
+    .replace(/#.*$/, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/+$/, "");
+}
