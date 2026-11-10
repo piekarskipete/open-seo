@@ -51,21 +51,7 @@ export function comparableUrl(url: string): string {
     .replace(/\/+$/, "");
 }
 
-/** Colors a tag can take; the client maps each to theme-aware classes. */
-export const GSC_TRACKER_TAG_COLORS = [
-  "gray",
-  "red",
-  "orange",
-  "amber",
-  "green",
-  "teal",
-  "blue",
-  "violet",
-  "pink",
-] as const;
-
-export type GscTrackerTagColor = (typeof GSC_TRACKER_TAG_COLORS)[number];
-
+/** The longest tag name, in characters. */
 export const GSC_TRACKER_TAG_NAME_MAX = 40;
 
 /** Periods a followed phrase's chart can show, in days. */

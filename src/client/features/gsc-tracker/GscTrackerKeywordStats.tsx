@@ -79,7 +79,7 @@ export function StartDateButton({
   initialDate,
   canReset,
   className,
-  outline = false,
+  inBar = false,
 }: {
   projectId: string;
   ids: string[];
@@ -88,8 +88,8 @@ export function StartDateButton({
   /** Offer "Use the day added" (a phrase has a date set by hand). */
   canReset: boolean;
   className?: string;
-  /** An outlined, toolbar-sized trigger instead of a quiet link-like one. */
-  outline?: boolean;
+  /** Sits in the bulk bar at the bottom: a bar-sized trigger, opening up. */
+  inBar?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -120,8 +120,8 @@ export function StartDateButton({
       <PopoverTrigger
         render={
           <Button
-            variant={outline ? "outline" : "ghost"}
-            size={outline ? "sm" : "xs"}
+            variant="ghost"
+            size={inBar ? "sm" : "xs"}
             className={className}
           />
         }
@@ -129,7 +129,11 @@ export function StartDateButton({
         <CalendarDays className="size-3.5" />
         Set start date
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72">
+      <PopoverContent
+        side={inBar ? "top" : "bottom"}
+        align="start"
+        className="w-72"
+      >
         <PopoverHeader>
           <PopoverTitle>
             {many ? `Start date for ${ids.length} phrases` : "Start date"}
@@ -183,13 +187,13 @@ export function CheckpointsButton({
   projectId,
   ids,
   initial,
-  outline = false,
+  inBar = false,
 }: {
   projectId: string;
   ids: string[];
   /** The days the picker opens on. */
   initial: string[];
-  outline?: boolean;
+  inBar?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -229,16 +233,20 @@ export function CheckpointsButton({
       <PopoverTrigger
         render={
           <Button
-            variant={outline ? "outline" : "ghost"}
-            size={outline ? "sm" : "xs"}
-            className={outline ? undefined : "text-muted-foreground"}
+            variant="ghost"
+            size={inBar ? "sm" : "xs"}
+            className={inBar ? undefined : "text-muted-foreground"}
           />
         }
       >
         <Flag className="size-3.5" />
         {initial.length > 0 ? `Checkpoints (${initial.length})` : "Checkpoints"}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72">
+      <PopoverContent
+        side={inBar ? "top" : "bottom"}
+        align="start"
+        className="w-72"
+      >
         <PopoverHeader>
           <PopoverTitle>
             {many ? `Checkpoints for ${ids.length} phrases` : "Checkpoints"}

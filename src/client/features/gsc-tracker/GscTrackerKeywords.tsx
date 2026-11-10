@@ -20,13 +20,11 @@ import {
 } from "@/client/features/gsc-tracker/GscTrackerKeywordRow";
 import { KeywordDetail } from "@/client/features/gsc-tracker/GscTrackerKeywordDetail";
 import {
-  SelectionBar,
-  TagFilter,
+  KeywordBulkBar,
+  KeywordTagFilter,
 } from "@/client/features/gsc-tracker/GscTrackerKeywordToolbar";
-import { TagManagerDialog } from "@/client/features/gsc-tracker/GscTrackerTagManager";
 import {
   matchesTagFilter,
-  UNTAGGED,
   useTags,
   type Tag,
 } from "@/client/features/gsc-tracker/gscTrackerTags";
@@ -55,22 +53,16 @@ export function KeywordsTab({
   );
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [managingTags, setManagingTags] = useState(false);
   const result = useQuery({
     queryKey: ["gscTrackerKeywords", projectId, month],
     queryFn: () => getGscTrackerKeywords({ data: { projectId, month } }),
   });
   const tags = useTags(projectId).data ?? [];
-  // A deleted tag drops out of the filter, and with no tags left there is
-  // nothing to filter by.
-  const activeFilter = new Set(
-    [...tagFilter].filter(
-      (id) =>
-        tags.some((tag) => tag.id === id) ||
-        (id === UNTAGGED && tags.length > 0),
-    ),
+  // A deleted tag drops out of the filter.
+  const activeFilter = tagFilter.filter((id) =>
+    tags.some((tag) => tag.id === id),
   );
   const visible = (result.data?.keywords ?? []).filter((keyword) =>
     matchesTagFilter(keyword.tagIds, activeFilter),
@@ -108,12 +100,20 @@ export function KeywordsTab({
             ))}
           </SelectContent>
         </Select>
-        {canManage ? (
-          <Button size="sm" onClick={() => setAdding(true)}>
-            <Plus className="size-3.5" />
-            Add phrases
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <KeywordTagFilter
+            projectId={projectId}
+            tags={tags}
+            value={activeFilter}
+            onChange={setTagFilter}
+          />
+          {canManage ? (
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" />
+              Add phrases
+            </Button>
+          ) : null}
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
         Clicks, impressions, CTR and average position are the month&apos;s
@@ -139,30 +139,6 @@ export function KeywordsTab({
         />
       ) : (
         <>
-          {tags.length > 0 ? (
-            <TagFilter
-              tags={tags}
-              value={activeFilter}
-              onChange={setTagFilter}
-            />
-          ) : null}
-          {selection.length > 0 ? (
-            <SelectionBar
-              projectId={projectId}
-              selected={selection.map((keyword) => keyword.id)}
-              tags={tags}
-              tagsOnSelection={
-                new Set(selection.flatMap((keyword) => keyword.tagIds))
-              }
-              startDate={selection[0]?.startDate ?? ""}
-              anyCustomStart={selection.some(
-                (keyword) => !keyword.startIsDefault,
-              )}
-              checkpoints={selection[0]?.checkpoints ?? []}
-              onClear={() => setSelected(new Set())}
-              onManageTags={() => setManagingTags(true)}
-            />
-          ) : null}
           {visible.length === 0 ? (
             <EmptyState
               kind="filtered"
@@ -184,10 +160,18 @@ export function KeywordsTab({
           )}
         </>
       )}
-      {managingTags ? (
-        <TagManagerDialog
+      {canManage ? (
+        <KeywordBulkBar
           projectId={projectId}
-          onClose={() => setManagingTags(false)}
+          selected={selection.map((keyword) => keyword.id)}
+          tags={tags}
+          selectedTags={tags.filter((tag) =>
+            selection.some((keyword) => keyword.tagIds.includes(tag.id)),
+          )}
+          startDate={selection[0]?.startDate ?? ""}
+          anyCustomStart={selection.some((keyword) => !keyword.startIsDefault)}
+          checkpoints={selection[0]?.checkpoints ?? []}
+          onClear={() => setSelected(new Set())}
         />
       ) : null}
       {adding ? (

@@ -1,13 +1,35 @@
 import { AppError } from "@/server/lib/errors";
 import { GscTrackerKeywordRepository } from "../repositories/GscTrackerKeywordRepository";
 import { GscTrackerTagRepository } from "../repositories/GscTrackerTagRepository";
+import { GSC_TRACKER_TAG_NAME_MAX } from "@/shared/gsc-tracker";
+import { normalizeSavedKeywordTags } from "@/shared/saved-keyword-tags";
 import {
-  GSC_TRACKER_TAG_NAME_MAX,
-  type GscTrackerTagColor,
-} from "@/shared/gsc-tracker";
+  resolveTagColor,
+  TAG_COLOR_KEYS,
+  type TagColorKey,
+} from "@/shared/tag-colors";
+
+// GSC Tracker tags belong to the tracker alone: they share the app's tag
+// look (palette, chips, dialogs) but not the Saved Keywords tag list.
 
 // Tags per project; enough to group phrases without a cluttered filter.
 const MAX_TAGS = 50;
+
+// Colors stored before the tracker used the app's tag palette.
+const EARLIER_COLORS: Record<string, TagColorKey> = {
+  gray: "slate",
+  red: "rose",
+  orange: "amber",
+  green: "emerald",
+  teal: "emerald",
+  blue: "sky",
+  pink: "fuchsia",
+};
+
+function paletteColor(tag: { id: string; color: string }): TagColorKey {
+  const known = TAG_COLOR_KEYS.find((key) => key === tag.color);
+  return known ?? EARLIER_COLORS[tag.color] ?? resolveTagColor({ id: tag.id });
+}
 
 function cleanName(name: string): string {
   const cleaned = name.trim().replace(/\s+/g, " ");
@@ -20,20 +42,7 @@ function cleanName(name: string): string {
   return cleaned;
 }
 
-/** Throws when another tag of the project already has this name. */
-function assertUniqueName(
-  tags: { id: string; name: string }[],
-  name: string,
-  exceptId?: string,
-) {
-  const taken = tags.some(
-    (tag) =>
-      tag.id !== exceptId && tag.name.toLowerCase() === name.toLowerCase(),
-  );
-  if (taken)
-    throw new AppError("CONFLICT", `A tag named “${name}” already exists.`);
-}
-
+/** The project's tags with how many phrases carry each, by name. */
 async function list(projectId: string) {
   const [tags, assignments] = await Promise.all([
     GscTrackerTagRepository.list(projectId),
@@ -45,43 +54,31 @@ async function list(projectId: string) {
   return tags.map((tag) => ({
     id: tag.id,
     name: tag.name,
-    color: tag.color,
-    phrases: counts.get(tag.id) ?? 0,
+    normalizedName: tag.name.toLocaleLowerCase(),
+    color: paletteColor(tag),
+    keywordCount: counts.get(tag.id) ?? 0,
   }));
-}
-
-async function create(input: {
-  projectId: string;
-  name: string;
-  color: GscTrackerTagColor;
-}) {
-  const name = cleanName(input.name);
-  const tags = await GscTrackerTagRepository.list(input.projectId);
-  if (tags.length >= MAX_TAGS)
-    throw new AppError(
-      "VALIDATION_ERROR",
-      `A project can have up to ${MAX_TAGS} tags.`,
-    );
-  assertUniqueName(tags, name);
-  const id = await GscTrackerTagRepository.create({
-    projectId: input.projectId,
-    name,
-    color: input.color,
-  });
-  return { id };
 }
 
 async function update(input: {
   projectId: string;
   id: string;
   name?: string;
-  color?: GscTrackerTagColor;
+  color?: TagColorKey;
 }) {
   const tags = await GscTrackerTagRepository.list(input.projectId);
   if (!tags.some((tag) => tag.id === input.id))
     throw new AppError("NOT_FOUND", "That tag no longer exists.");
   const name = input.name === undefined ? undefined : cleanName(input.name);
-  if (name) assertUniqueName(tags, name, input.id);
+  if (
+    name &&
+    tags.some(
+      (tag) =>
+        tag.id !== input.id &&
+        tag.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+    )
+  )
+    throw new AppError("CONFLICT", `A tag named “${name}” already exists.`);
   await GscTrackerTagRepository.update(input.projectId, input.id, {
     name,
     color: input.color,
@@ -92,24 +89,56 @@ async function remove(projectId: string, id: string) {
   await GscTrackerTagRepository.remove(projectId, id);
 }
 
-/** Adds a tag to, or takes it off, the given phrases of the project. */
-async function setOnKeywords(input: {
+/**
+ * Adds tags (by name, creating the ones the project doesn't have yet) to
+ * the given phrases, and takes tags off them. Phrases of other projects
+ * are ignored.
+ */
+async function applyToKeywords(input: {
   projectId: string;
-  tagId: string;
   keywordIds: string[];
-  action: "add" | "remove";
+  addTags?: string[];
+  removeTagIds?: string[];
 }) {
   const [tags, keywords] = await Promise.all([
     GscTrackerTagRepository.list(input.projectId),
     GscTrackerKeywordRepository.list(input.projectId),
   ]);
-  if (!tags.some((tag) => tag.id === input.tagId))
-    throw new AppError("NOT_FOUND", "That tag no longer exists.");
   const own = new Set(keywords.map((keyword) => keyword.id));
   const ids = [...new Set(input.keywordIds)].filter((id) => own.has(id));
-  if (input.action === "add")
-    await GscTrackerTagRepository.assign(input.tagId, ids);
-  else await GscTrackerTagRepository.unassign(input.tagId, ids);
+  if (ids.length === 0) return { changed: 0 };
+
+  const byName = new Map(
+    tags.map((tag) => [tag.name.toLocaleLowerCase(), tag.id]),
+  );
+  const toAdd: string[] = [];
+  let count = tags.length;
+  for (const tag of normalizeSavedKeywordTags(input.addTags)) {
+    let id = byName.get(tag.normalizedName);
+    if (!id) {
+      if (count >= MAX_TAGS)
+        throw new AppError(
+          "VALIDATION_ERROR",
+          `A project can have up to ${MAX_TAGS} tags.`,
+        );
+      const newId = crypto.randomUUID();
+      await GscTrackerTagRepository.create({
+        id: newId,
+        projectId: input.projectId,
+        name: cleanName(tag.name),
+        color: resolveTagColor({ id: newId }),
+      });
+      id = newId;
+      byName.set(tag.normalizedName, id);
+      count += 1;
+    }
+    toAdd.push(id);
+  }
+  for (const tagId of toAdd) await GscTrackerTagRepository.assign(tagId, ids);
+
+  const known = new Set(tags.map((tag) => tag.id));
+  for (const tagId of new Set(input.removeTagIds ?? []))
+    if (known.has(tagId)) await GscTrackerTagRepository.unassign(tagId, ids);
   return { changed: ids.length };
 }
 
@@ -131,9 +160,8 @@ async function tagsByKeyword(
 
 export const GscTrackerTagService = {
   list,
-  create,
   update,
   remove,
-  setOnKeywords,
+  applyToKeywords,
   tagsByKeyword,
 };
