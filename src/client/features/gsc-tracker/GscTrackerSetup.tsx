@@ -29,6 +29,7 @@ import {
   type getGscTrackerStatus,
 } from "@/serverFunctions/gscTracker";
 import type {
+  GscTrackerDateFormat,
   GscTrackerPositionFormat,
   GscTrackerSortKey,
 } from "@/shared/gsc-tracker";
@@ -156,6 +157,7 @@ export function TrackerStatus({
               projectId={projectId}
               positionFormat={status.positionFormat}
               explorerSort={status.explorerSort}
+              dateFormat={status.dateFormat}
             />
             <Button
               variant="ghost"
@@ -205,9 +207,15 @@ const SORT_KEYS: { value: GscTrackerSortKey; label: string }[] = [
   { value: "position", label: "Position" },
 ];
 
+const DATE_FORMATS: { value: GscTrackerDateFormat; label: string }[] = [
+  { value: "dd.mm", label: "03.10" },
+  { value: "mon-d", label: "Oct 3" },
+];
+
 type Settings = {
   positionFormat?: GscTrackerPositionFormat;
   explorerSort?: GscTrackerSortKey;
+  dateFormat?: GscTrackerDateFormat;
 };
 
 /** Project-wide display settings for the tracker. */
@@ -215,10 +223,12 @@ function TrackerSettings({
   projectId,
   positionFormat,
   explorerSort,
+  dateFormat,
 }: {
   projectId: string;
   positionFormat: GscTrackerPositionFormat;
   explorerSort: GscTrackerSortKey;
+  dateFormat: GscTrackerDateFormat;
 }) {
   const queryClient = useQueryClient();
   const save = useMutation({
@@ -262,6 +272,15 @@ function TrackerSettings({
             7.4 shows Search Console&apos;s average position; 7 rounds it to a
             whole place.
           </p>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span>Day format</span>
+          <SegmentedToggle
+            showLabels
+            value={pending?.dateFormat ?? dateFormat}
+            onChange={(value) => save.mutate({ dateFormat: value })}
+            items={DATE_FORMATS.map((item) => ({ ...item, icon: null }))}
+          />
         </div>
         <div className="space-y-1">
           <div className="text-sm">Query Explorer default sort</div>

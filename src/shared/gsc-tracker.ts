@@ -28,6 +28,11 @@ export const GSC_TRACKER_SORT_KEYS = [
 
 export type GscTrackerSortKey = (typeof GSC_TRACKER_SORT_KEYS)[number];
 
+/** How day labels read: "dd.mm" (03.10) or "mon-d" (Oct 3). */
+export const GSC_TRACKER_DATE_FORMATS = ["dd.mm", "mon-d"] as const;
+
+export type GscTrackerDateFormat = (typeof GSC_TRACKER_DATE_FORMATS)[number];
+
 /** Search Console reports queries lowercased with single spaces. */
 export function normalizeQuery(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, " ");

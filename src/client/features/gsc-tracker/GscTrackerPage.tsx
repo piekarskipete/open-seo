@@ -22,6 +22,7 @@ import {
 import { KeywordsTab } from "@/client/features/gsc-tracker/GscTrackerKeywords";
 import { ExplorerTab } from "@/client/features/gsc-tracker/GscTrackerExplorer";
 import {
+  DateFormatContext,
   formatDay,
   PositionFormatContext,
 } from "@/client/features/gsc-tracker/gscTrackerView";
@@ -118,19 +119,21 @@ export function GscTrackerPage({
               <PositionFormatContext.Provider
                 value={status.data.positionFormat}
               >
-                <TrackerReport
-                  projectId={projectId}
-                  canManage={status.data.canManage}
-                  explorerSort={status.data.explorerSort}
-                  history={{
-                    oldestDate: status.data.oldestDate,
-                    newestDate: status.data.newestDate,
-                    progress: status.data.progress,
-                  }}
-                  tab={tab}
-                  days={days}
-                  onChange={onChange}
-                />
+                <DateFormatContext.Provider value={status.data.dateFormat}>
+                  <TrackerReport
+                    projectId={projectId}
+                    canManage={status.data.canManage}
+                    explorerSort={status.data.explorerSort}
+                    history={{
+                      oldestDate: status.data.oldestDate,
+                      newestDate: status.data.newestDate,
+                      progress: status.data.progress,
+                    }}
+                    tab={tab}
+                    days={days}
+                    onChange={onChange}
+                  />
+                </DateFormatContext.Provider>
               </PositionFormatContext.Provider>
             ) : (
               <EmptyState

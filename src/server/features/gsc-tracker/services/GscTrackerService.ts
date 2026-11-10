@@ -30,6 +30,7 @@ import { metrics, periods } from "./gscTrackerWindows";
 import { syncKeywords } from "./gscTrackerKeywordSync";
 import {
   GSC_TRACKER_SORT_KEYS,
+  type GscTrackerDateFormat,
   type GscTrackerPositionFormat,
   type GscTrackerSortKey,
 } from "@/shared/gsc-tracker";
@@ -77,6 +78,8 @@ async function getStatus(projectId: string) {
   const explorerSort: GscTrackerSortKey =
     GSC_TRACKER_SORT_KEYS.find((key) => key === tracker?.explorerSort) ??
     "clicks";
+  const dateFormat: GscTrackerDateFormat =
+    tracker?.dateFormat === "mon-d" ? "mon-d" : "dd.mm";
   const storedDays =
     tracker?.oldestDate && tracker.newestDate
       ? daysBetween(tracker.oldestDate, tracker.newestDate)
@@ -92,6 +95,7 @@ async function getStatus(projectId: string) {
     lastError: tracker?.lastError ?? null,
     positionFormat,
     explorerSort,
+    dateFormat,
     progress: Math.min(1, storedDays / daysBetween(floor, latest)),
   };
 }
@@ -128,13 +132,14 @@ async function syncNow(projectId: string) {
   await syncKeywords(tracker);
 }
 
-/** Project-wide display settings: how positions read (7.4 or 7) and
- *  Query Explorer's default order. */
+/** Project-wide display settings: how positions read (7.4 or 7), how day
+ *  labels read (03.10 or Oct 3) and Query Explorer's default order. */
 async function updateSettings(
   projectId: string,
   settings: {
     positionFormat?: GscTrackerPositionFormat;
     explorerSort?: GscTrackerSortKey;
+    dateFormat?: GscTrackerDateFormat;
   },
 ) {
   const tracker = await GscTrackerRepository.get(projectId);

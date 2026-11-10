@@ -1,0 +1,1 @@
+ALTER TABLE "gsc_tracker_projects" ADD COLUMN "date_format" text DEFAULT 'dd.mm' NOT NULL;

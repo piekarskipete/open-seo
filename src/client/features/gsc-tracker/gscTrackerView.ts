@@ -3,6 +3,7 @@
 
 import { createContext, useContext } from "react";
 import type {
+  GscTrackerDateFormat,
   GscTrackerPositionFormat,
   GscTrackerSortKey,
 } from "@/shared/gsc-tracker";
@@ -35,6 +36,26 @@ export const PositionFormatContext =
 
 export function usePositionFormat(): GscTrackerPositionFormat {
   return useContext(PositionFormatContext);
+}
+
+/** The project's day-label format, set by the tracker page. */
+export const DateFormatContext = createContext<GscTrackerDateFormat>("dd.mm");
+
+export function useDateFormat(): GscTrackerDateFormat {
+  return useContext(DateFormatContext);
+}
+
+/** A YYYY-MM-DD day as the project labels it: "03.10" or "Oct 3". */
+export function formatDayLabel(
+  day: string,
+  dateFormat: GscTrackerDateFormat,
+): string {
+  if (dateFormat === "dd.mm") return `${day.slice(8, 10)}.${day.slice(5, 7)}`;
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 /** A position as the project shows it: 7.4, or 7 when set to whole numbers. */
