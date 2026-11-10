@@ -46,7 +46,7 @@ const RANGES: { days: GscTrackerRangeDays; label: string }[] = [
 
 const TAB_LABELS: Record<GscTrackerTab, string> = {
   keywords: "Keywords",
-  explorer: "Query explorer",
+  explorer: "Query Explorer",
   overview: "Overview",
   cannibalization: "Cannibalization",
 };
