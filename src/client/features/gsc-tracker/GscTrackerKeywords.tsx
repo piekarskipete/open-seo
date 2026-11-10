@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -92,10 +92,11 @@ export function KeywordsTab({
         ) : null}
       </div>
       <p className="text-xs text-muted-foreground">
-        Each day is fetched from Search Console on its own, so a cell is the
-        phrase&apos;s position on the target URL that day only. A highlighted
-        cell means another of your pages got more clicks or impressions for the
-        phrase that day; open the phrase to compare every page.
+        Clicks, impressions, CTR and average position are the month&apos;s
+        totals for the target URL. Open a phrase to see its position on each day
+        of the month (each day fetched from Search Console on its own) and every
+        page of yours that showed for it. A highlighted day means another page
+        got more clicks or impressions than the target.
       </p>
       {result.isPending ? (
         <Skeleton className="h-64 w-full" />
@@ -130,6 +131,7 @@ export function KeywordsTab({
   );
 }
 
+/** Month totals per phrase on the left/right; days open below on demand. */
 function KeywordTable({
   projectId,
   data,
@@ -144,161 +146,177 @@ function KeywordTable({
   canManage: boolean;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b text-xs text-muted-foreground">
-            <th className="sticky left-0 z-10 min-w-64 bg-card px-3 py-2 text-left font-medium">
-              Phrase / page
-            </th>
-            {data.days.map((day) => (
-              <th key={day} className="w-9 px-1 py-2 text-center font-medium">
-                {Number(day.slice(8))}
-              </th>
-            ))}
-            <th className="px-2 py-2 text-right font-medium">Avg</th>
-            <th className="px-2 py-2 text-right font-medium">Clicks</th>
-            <th className="px-3 py-2 text-right font-medium">Impr.</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.keywords.map((keyword) => (
-            <Fragment key={keyword.id}>
-              <KeywordRow
-                keyword={keyword}
-                days={data.days}
-                open={expanded.has(keyword.id)}
-                onToggle={() => onToggle(keyword.id)}
-              />
-              {expanded.has(keyword.id) ? (
-                <KeywordPages
-                  projectId={projectId}
-                  keyword={keyword}
-                  days={data.days}
-                  canManage={canManage}
-                />
-              ) : null}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
+    <div className="divide-y rounded-lg border bg-card">
+      <div className="flex items-center gap-4 px-3 py-2 text-xs font-medium text-muted-foreground">
+        <span className="flex-1">Phrase / target URL</span>
+        <MetricColumns
+          values={["Clicks", "Impr.", "CTR", "Position"]}
+          label="Month totals for the target URL"
+        />
+      </div>
+      {data.keywords.map((keyword) => (
+        <div key={keyword.id}>
+          <KeywordRow
+            keyword={keyword}
+            open={expanded.has(keyword.id)}
+            onToggle={() => onToggle(keyword.id)}
+          />
+          {expanded.has(keyword.id) ? (
+            <KeywordDetail
+              projectId={projectId}
+              keyword={keyword}
+              days={data.days}
+              canManage={canManage}
+            />
+          ) : null}
+        </div>
+      ))}
     </div>
   );
 }
 
+/** Four right-aligned columns: clicks, impressions, CTR, position. */
+function MetricColumns({
+  values,
+  label,
+}: {
+  values: [string, string, string, string];
+  label?: string;
+}) {
+  return (
+    <span
+      className="grid shrink-0 grid-cols-4 gap-2 text-right tabular-nums"
+      aria-label={label}
+    >
+      {values.map((value, index) => (
+        <span key={index} className="w-14 sm:w-16">
+          {value}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function useMonthValues() {
+  const positionFormat = usePositionFormat();
+  return (page: Page | undefined): [string, string, string, string] => [
+    formatMetric("clicks", page?.clicks ?? null),
+    formatMetric("impressions", page?.impressions ?? null),
+    formatMetric(
+      "ctr",
+      page && page.impressions > 0 ? page.clicks / page.impressions : null,
+    ),
+    formatMetric("position", page?.position ?? null, positionFormat),
+  ];
+}
+
 function KeywordRow({
   keyword,
-  days,
   open,
   onToggle,
 }: {
   keyword: Keyword;
-  days: string[];
   open: boolean;
   onToggle: () => void;
 }) {
+  const monthValues = useMonthValues();
   const target = keyword.pages.find((page) => page.isTarget);
-  const outranked = new Set(keyword.outrankedDays);
   return (
-    <tr className="border-b hover:bg-muted/40">
-      <td className="sticky left-0 z-10 bg-card px-3 py-2">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          className="flex w-full items-start gap-1.5 text-left"
-        >
-          {open ? (
-            <ChevronDown className="mt-0.5 size-3.5 shrink-0" />
-          ) : (
-            <ChevronRight className="mt-0.5 size-3.5 shrink-0" />
-          )}
-          <span className="min-w-0">
-            <span className="font-medium">{keyword.query}</span>
-            {keyword.cannibalized ? (
-              <Badge variant="warning" className="ml-2">
-                Competing pages
-              </Badge>
-            ) : null}
-            <span className="block truncate text-xs text-muted-foreground">
-              {keyword.targetUrl}
-            </span>
-            {keyword.newestDate ? null : (
-              <span className="block text-xs text-muted-foreground">
-                Fetching the first days…
-              </span>
-            )}
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="flex w-full items-center gap-4 px-3 py-2.5 text-left text-sm hover:bg-muted/40"
+    >
+      <span className="flex min-w-0 flex-1 items-start gap-1.5">
+        {open ? (
+          <ChevronDown className="mt-0.5 size-3.5 shrink-0" />
+        ) : (
+          <ChevronRight className="mt-0.5 size-3.5 shrink-0" />
+        )}
+        <span className="min-w-0">
+          <span className="font-medium">{keyword.query}</span>
+          {keyword.cannibalized ? (
+            <Badge variant="warning" className="ml-2">
+              Competing pages
+            </Badge>
+          ) : null}
+          <span className="block truncate text-xs text-muted-foreground">
+            {keyword.targetUrl}
           </span>
-        </button>
-      </td>
-      <DayCells page={target} days={days} outranked={outranked} />
-      <Totals page={target} />
-    </tr>
+          {keyword.newestDate ? null : (
+            <span className="block text-xs text-muted-foreground">
+              Fetching the first days…
+            </span>
+          )}
+        </span>
+      </span>
+      <MetricColumns values={monthValues(target)} />
+    </button>
   );
 }
 
-/** A page's position per day, colored by the move from the day before. */
-function DayCells({
+/**
+ * One cell per day of the month with that day's position only. The grid
+ * wraps, so a whole month fits without scrolling sideways.
+ */
+function DayGrid({
   page,
   days,
   outranked,
 }: {
-  page: Page | undefined;
+  page: Page;
   days: string[];
   outranked?: Set<string>;
 }) {
   const positionFormat = usePositionFormat();
-  return days.map((day, index) => {
-    const today = page?.days[day]?.position;
-    const before =
-      index > 0 ? page?.days[days[index - 1]]?.position : undefined;
-    const move =
-      today === undefined || before === undefined ? 0 : before - today;
-    const beaten = outranked?.has(day) ?? false;
-    return (
-      <td
-        key={day}
-        title={
-          beaten
-            ? "Another page got more clicks or impressions for this phrase this day."
-            : undefined
-        }
-        className={cn(
-          "px-1 py-2 text-center text-xs tabular-nums",
-          beaten && "bg-warning/15",
-          move >= 0.5 && "text-success",
-          move <= -0.5 && "text-destructive",
-        )}
-      >
-        {today === undefined ? (
-          <span className="text-muted-foreground">–</span>
-        ) : (
-          formatPosition(today, positionFormat)
-        )}
-      </td>
-    );
-  });
-}
-
-function Totals({ page }: { page: Page | undefined }) {
-  const positionFormat = usePositionFormat();
   return (
-    <>
-      <td className="px-2 py-2 text-right text-xs tabular-nums">
-        {formatMetric("position", page?.position ?? null, positionFormat)}
-      </td>
-      <td className="px-2 py-2 text-right text-xs tabular-nums">
-        {formatMetric("clicks", page?.clicks ?? null)}
-      </td>
-      <td className="px-3 py-2 text-right text-xs tabular-nums">
-        {formatMetric("impressions", page?.impressions ?? null)}
-      </td>
-    </>
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-1">
+      {days.map((day, index) => {
+        const today = page.days[day]?.position;
+        const before =
+          index > 0 ? page.days[days[index - 1]]?.position : undefined;
+        const move =
+          today === undefined || before === undefined ? 0 : before - today;
+        const beaten = outranked?.has(day) ?? false;
+        return (
+          <div
+            key={day}
+            title={
+              beaten
+                ? "Another page got more clicks or impressions for this phrase this day."
+                : undefined
+            }
+            className={cn(
+              "rounded border px-1 py-0.5 text-center tabular-nums",
+              beaten ? "border-warning/50 bg-warning/15" : "bg-card",
+            )}
+          >
+            <div className="text-[10px] text-muted-foreground">
+              {Number(day.slice(8))}
+            </div>
+            <div
+              className={cn(
+                "text-xs",
+                move >= 0.5 && "text-success",
+                move <= -0.5 && "text-destructive",
+              )}
+            >
+              {today === undefined ? (
+                <span className="text-muted-foreground">–</span>
+              ) : (
+                formatPosition(today, positionFormat)
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-/** Every page Search Console showed for the phrase this month. */
-function KeywordPages({
+/** Every page Search Console showed for the phrase this month, day by day. */
+function KeywordDetail({
   projectId,
   keyword,
   days,
@@ -310,6 +328,8 @@ function KeywordPages({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
+  const monthValues = useMonthValues();
+  const outranked = new Set(keyword.outrankedDays);
   const remove = useMutation({
     mutationFn: () =>
       removeGscTrackerKeyword({ data: { projectId, id: keyword.id } }),
@@ -321,50 +341,47 @@ function KeywordPages({
     },
   });
   return (
-    <>
+    <div className="space-y-4 bg-muted/30 px-3 py-3 sm:pl-8">
       {keyword.pages.length === 0 ? (
-        <tr className="border-b bg-muted/30">
-          <td
-            colSpan={days.length + 4}
-            className="px-8 py-2 text-xs text-muted-foreground"
-          >
-            No page of yours showed for this phrase in this month.
-          </td>
-        </tr>
+        <p className="text-xs text-muted-foreground">
+          No page of yours showed for this phrase in this month.
+        </p>
       ) : null}
       {keyword.pages.map((page) => (
-        <tr key={page.url} className="border-b bg-muted/30">
-          <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 pl-8 text-xs">
-            <span className="break-all">{page.url}</span>
-            {page.isTarget ? (
-              <Badge variant="success" className="ml-2">
-                Target
-              </Badge>
-            ) : page.stronger ? (
-              <Badge variant="warning" className="ml-2">
-                Stronger than target
-              </Badge>
-            ) : null}
-          </td>
-          <DayCells page={page} days={days} />
-          <Totals page={page} />
-        </tr>
+        <div key={page.url} className="space-y-1.5">
+          <div className="flex items-start gap-4 text-xs">
+            <span className="min-w-0 flex-1 break-all">
+              {page.url}
+              {page.isTarget ? (
+                <Badge variant="success" className="ml-2">
+                  Target
+                </Badge>
+              ) : page.stronger ? (
+                <Badge variant="warning" className="ml-2">
+                  Stronger than target
+                </Badge>
+              ) : null}
+            </span>
+            <MetricColumns values={monthValues(page)} />
+          </div>
+          <DayGrid
+            page={page}
+            days={days}
+            outranked={page.isTarget ? outranked : undefined}
+          />
+        </div>
       ))}
       {canManage ? (
-        <tr className="border-b bg-muted/30">
-          <td colSpan={days.length + 4} className="px-8 py-1.5">
-            <Button
-              variant="ghost"
-              size="xs"
-              className="-ml-2 text-muted-foreground hover:text-destructive"
-              pending={remove.isPending}
-              onClick={() => remove.mutate()}
-            >
-              Stop following this phrase
-            </Button>
-          </td>
-        </tr>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="-ml-2 text-muted-foreground hover:text-destructive"
+          pending={remove.isPending}
+          onClick={() => remove.mutate()}
+        >
+          Stop following this phrase
+        </Button>
       ) : null}
-    </>
+    </div>
   );
 }
