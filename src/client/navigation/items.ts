@@ -5,6 +5,7 @@ import {
   ChartLine,
   ClipboardCheck,
   FileText,
+  History,
   Globe,
   LayoutDashboard,
   Link2,
@@ -49,6 +50,11 @@ const projectNavItems = [
     to: "/p/$projectId/search-performance" as const,
     label: "GSC Insights",
     icon: GoogleGlyphMuted,
+  },
+  {
+    to: "/p/$projectId/gsc-tracker" as const,
+    label: "GSC Tracker",
+    icon: History,
   },
   {
     to: "/p/$projectId/domain" as const,
@@ -150,6 +156,7 @@ export function getProjectNavGroups(projectId: string) {
       label: "My Site",
       items: [
         byPath("/p/$projectId/search-performance"),
+        byPath("/p/$projectId/gsc-tracker"),
         byPath("/p/$projectId/rank-tracking"),
         byPath("/p/$projectId/local-seo"),
         byPath("/p/$projectId/saved"),

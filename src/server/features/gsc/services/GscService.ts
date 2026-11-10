@@ -28,6 +28,7 @@ import {
   type GscConnection,
 } from "@/server/features/gsc/repositories/GscConnectionRepository";
 import { DashboardCacheService } from "@/server/features/dashboard/services/DashboardCacheService";
+import { GscTrackerRepository } from "@/server/features/gsc-tracker/repositories/GscTrackerRepository";
 import type {
   GscSearchAnalyticsRequest,
   GscSearchAnalyticsRow,
@@ -222,6 +223,8 @@ async function setSite(input: {
 async function disconnect(input: { projectId: string }): Promise<void> {
   await GscConnectionRepository.deleteByProjectId(input.projectId);
   await DashboardCacheService.deleteGscCache(input.projectId);
+  // Stored Search Console history leaves with the connection.
+  await GscTrackerRepository.remove(input.projectId);
 }
 
 /** Pass-through of GSC `searchAnalytics.query` for a project's connected property. */

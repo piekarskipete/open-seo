@@ -95,6 +95,35 @@ Then open **Integrations**, click **Connect with Google**, authorize the Google
 account that owns your verified property, and pick the property to bind to your
 project.
 
+## Keep your history with GSC Tracker
+
+Search Console only keeps 16 months, and every report asks Google live. **GSC
+Tracker** copies a project's data into your own OpenSEO database so trends load
+instantly and history keeps growing past Google's window.
+
+1. Connect Search Console to the project (above).
+2. Open **GSC Tracker** in the sidebar and click **Start tracking**.
+
+The most recent days arrive right away. Older days, back to Google's 16-month
+limit, arrive in the background every few minutes; a full backfill takes a few
+hours. The last few days are refreshed every few hours as Google finalizes them.
+
+What you get, for any period from 7 days to 16 months, compared with the period
+before it:
+
+- **Overview:** clicks, impressions, CTR and average position, with a daily chart.
+- **Queries / Pages:** every query or page with its change, plus views for
+  improved, declined, new and lost ones. Click a query for its daily trend and
+  the pages ranking for it.
+- **Cannibalization:** queries where two or more of your pages split the
+  impressions.
+
+For each day OpenSEO stores the property's totals (exact) and Search Console's
+top 1,000 query/page rows. On Postgres you can keep more with
+`GSC_TRACKER_ROWS_PER_DAY` (up to 25,000). Stopping tracking, disconnecting
+Search Console, or switching the project to another property deletes the stored
+history.
+
 ## How it works
 
 - OpenSEO uses your Google client to run the OAuth flow and stores the resulting

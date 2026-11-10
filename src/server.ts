@@ -332,6 +332,11 @@ export default {
         await runScheduledAiVisibility();
       }),
       withPgClient(() => sendFirstAuditEmails()),
+      withPgClient(async () => {
+        const { runScheduledGscTracker } =
+          await import("@/server/features/gsc-tracker/services/GscTrackerSyncService");
+        await runScheduledGscTracker();
+      }),
     ]);
     for (const result of checks)
       if (result.status === "rejected") throw result.reason;

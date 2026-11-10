@@ -1,0 +1,169 @@
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { History, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/client/components/ConfirmDialog";
+import { EmptyState } from "@/client/components/EmptyState";
+import { PermissionHint } from "@/client/components/PermissionHint";
+import { Alert, AlertDescription } from "@/client/components/ui/alert";
+import { Button } from "@/client/components/ui/button";
+import { formatDay } from "@/client/features/gsc-tracker/gscTrackerView";
+import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import {
+  startGscTracker,
+  stopGscTracker,
+  syncGscTracker,
+  type getGscTrackerStatus,
+} from "@/serverFunctions/gscTracker";
+
+// Turning the tracker on and off, and its sync status.
+
+export function StartTracking({
+  projectId,
+  canManage,
+  siteUrl,
+}: {
+  projectId: string;
+  canManage: boolean;
+  siteUrl: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const start = useMutation({
+    meta: { errorToast: false },
+    mutationFn: () => startGscTracker({ data: { projectId } }),
+    onSuccess: () => {
+      toast.success("Tracking started");
+      void queryClient.invalidateQueries({
+        queryKey: ["gscTrackerStatus", projectId],
+      });
+    },
+  });
+  return (
+    <EmptyState
+      variant="card"
+      icon={History}
+      title="Keep your Search Console history"
+      description={
+        <>
+          OpenSEO fetches{" "}
+          {siteUrl ? <strong>{siteUrl}</strong> : "your property"} day by day,
+          up to 16 months back, and keeps it up to date. Trends, winners and
+          losers, and competing pages then load from your own database.
+          {start.error ? (
+            <span role="alert" className="mt-2 block text-destructive">
+              {getStandardErrorMessage(start.error)}
+            </span>
+          ) : null}
+        </>
+      }
+      action={
+        canManage ? (
+          <Button onClick={() => start.mutate()} pending={start.isPending}>
+            Start tracking
+          </Button>
+        ) : (
+          <PermissionHint action="start tracking" />
+        )
+      }
+    />
+  );
+}
+
+type Status = Awaited<ReturnType<typeof getGscTrackerStatus>>;
+
+export function TrackerStatus({
+  projectId,
+  status,
+}: {
+  projectId: string;
+  status: Status;
+}) {
+  const queryClient = useQueryClient();
+  const [confirmStop, setConfirmStop] = useState(false);
+  const refresh = () =>
+    queryClient.invalidateQueries({
+      predicate: (query) =>
+        typeof query.queryKey[0] === "string" &&
+        query.queryKey[0].startsWith("gscTracker") &&
+        query.queryKey[1] === projectId,
+    });
+  const sync = useMutation({
+    mutationFn: () => syncGscTracker({ data: { projectId } }),
+    onSuccess: () => void refresh(),
+  });
+  const stop = useMutation({
+    mutationFn: () => stopGscTracker({ data: { projectId } }),
+    onSuccess: () => {
+      toast.success("Tracking stopped and history deleted");
+      setConfirmStop(false);
+      void refresh();
+    },
+  });
+
+  const loading = status.progress < 1;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3 text-sm">
+        <div className="space-y-0.5">
+          <div>
+            <span className="font-medium">{status.siteUrl}</span>
+            {status.oldestDate && status.newestDate ? (
+              <span className="text-muted-foreground">
+                {" "}
+                · {formatDay(status.oldestDate)} –{" "}
+                {formatDay(status.newestDate)}
+              </span>
+            ) : null}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {loading
+              ? `Loading history: ${Math.round(status.progress * 100)}% of 16 months. Older days keep arriving every few minutes.`
+              : "All 16 months loaded."}
+            {status.lastSyncedAt
+              ? ` Last refreshed ${new Date(status.lastSyncedAt).toLocaleString("en-US")}.`
+              : null}
+          </div>
+        </div>
+        {status.canManage ? (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => sync.mutate()}
+              pending={sync.isPending}
+            >
+              <RefreshCw className="size-3.5" />
+              Sync now
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => setConfirmStop(true)}
+            >
+              Stop tracking
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      {status.lastError ? (
+        <Alert variant="warning">
+          <AlertDescription>{status.lastError}</AlertDescription>
+        </Alert>
+      ) : null}
+      {confirmStop ? (
+        <ConfirmDialog
+          title="Stop tracking?"
+          confirmLabel="Stop and delete history"
+          destructive
+          pending={stop.isPending}
+          onConfirm={() => stop.mutate()}
+          onClose={() => setConfirmStop(false)}
+        >
+          This deletes the stored Search Console history for this project.
+          Search Console itself is not affected, and you can start again later.
+        </ConfirmDialog>
+      ) : null}
+    </div>
+  );
+}
