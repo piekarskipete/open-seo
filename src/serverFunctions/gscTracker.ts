@@ -15,8 +15,16 @@ import {
   GSC_TRACKER_CHART_DAYS,
 } from "@/shared/gsc-tracker";
 
+// Every call but the site list and adding a site names one tracked site of
+// the project; handlers check it belongs to the project before using it.
 const projectSchema = z.object({ projectId: z.string().min(1) });
-const rangeSchema = projectSchema.extend({
+const siteSchema = projectSchema.extend({ siteId: z.string().min(1) });
+const addSiteSchema = projectSchema.extend({
+  // Both, or neither for the project's own Search Console connection.
+  siteUrl: z.string().min(1).max(2048).optional(),
+  accountId: z.string().min(1).max(500).optional(),
+});
+const rangeSchema = siteSchema.extend({
   days: z.union(GSC_TRACKER_RANGE_DAYS.map((days) => z.literal(days))),
 });
 const listSchema = rangeSchema.extend({
@@ -24,23 +32,24 @@ const listSchema = rangeSchema.extend({
   page: z.string().max(2048).optional(),
 });
 const daySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const chartDaysSchema = z
+  .union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days)))
+  .optional();
 // A query's detail: the last N days, or a custom range (both ends inclusive).
-const querySchema = projectSchema
+const querySchema = siteSchema
   .extend({
     query: z.string().min(1).max(500),
-    days: z
-      .union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days)))
-      .optional(),
+    days: chartDaysSchema,
     from: daySchema.optional(),
     to: daySchema.optional(),
   })
   .refine((data) => data.days !== undefined || (data.from && data.to), {
     message: "Pick a period or a date range.",
   });
-const monthSchema = projectSchema.extend({
+const monthSchema = siteSchema.extend({
   month: z.string().regex(/^\d{4}-\d{2}$/),
 });
-const addKeywordsSchema = projectSchema.extend({
+const addKeywordsSchema = siteSchema.extend({
   entries: z
     .array(
       z.object({
@@ -51,33 +60,23 @@ const addKeywordsSchema = projectSchema.extend({
     .min(1)
     .max(1000),
 });
-const keywordSchema = projectSchema.extend({ id: z.string().min(1) });
-const startDateSchema = projectSchema.extend({
-  ids: z.array(z.string().min(1)).min(1).max(1000),
+const keywordSchema = siteSchema.extend({ id: z.string().min(1) });
+const idsSchema = z.array(z.string().min(1)).min(1).max(1000);
+const startDateSchema = siteSchema.extend({
+  ids: idsSchema,
   // A day, or null to measure from the day the phrase was added.
-  startDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable(),
+  startDate: daySchema.nullable(),
 });
-const checkpointsSchema = projectSchema.extend({
-  ids: z.array(z.string().min(1)).min(1).max(1000),
-  checkpoints: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(2),
+const checkpointsSchema = siteSchema.extend({
+  ids: idsSchema,
+  checkpoints: z.array(daySchema).max(2),
 });
 const keywordChartSchema = keywordSchema
   .extend({
-    days: z
-      .union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days)))
-      .optional(),
+    days: chartDaysSchema,
     // A custom range instead of `days`, both ends inclusive.
-    from: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .optional(),
-    to: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .optional(),
+    from: daySchema.optional(),
+    to: daySchema.optional(),
   })
   .refine((data) => data.days !== undefined || (data.from && data.to), {
     message: "Pick a period or a date range.",
@@ -89,103 +88,158 @@ const trackQueriesSchema = rangeSchema.extend({
   startDate: daySchema.nullable().optional(),
   checkpoints: z.array(daySchema).max(2).optional(),
 });
-const settingsSchema = projectSchema.extend({
+const settingsSchema = siteSchema.extend({
   positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
   explorerSort: z.enum(GSC_TRACKER_SORT_KEYS).optional(),
   dateFormat: z.enum(GSC_TRACKER_DATE_FORMATS).optional(),
 });
 
-export const getGscTrackerStatus = createServerFn({ method: "POST" })
+type Role = Parameters<typeof hasOrgPermission>[0];
+const canManage = (role: Role) =>
+  hasOrgPermission(role, { integration: ["manage"] });
+
+/** The project's tracked sites, for the site list. */
+export const getGscTrackerSites = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(projectSchema)
   .handler(async ({ context }) => ({
-    ...(await GscTrackerService.getStatus(context.projectId)),
-    canManage: hasOrgPermission(context.role, { integration: ["manage"] }),
+    ...(await GscTrackerService.getAvailability(context.projectId)),
+    sites: await GscTrackerService.listSites(context.projectId),
+    canManage: canManage(context.role),
   }));
 
-export const startGscTracker = createServerFn({ method: "POST" })
+/** One site's state, for its page. */
+export const getGscTrackerStatus = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
-  .validator(projectSchema)
-  .handler(async ({ context }) => {
+  .validator(siteSchema)
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return {
+      ...(await GscTrackerService.getAvailability(context.projectId)),
+      ...(await GscTrackerService.getStatus(site)),
+      canManage: canManage(context.role),
+    };
+  });
+
+export const addGscTrackerSite = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(addSiteSchema)
+  .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    await GscTrackerService.enable({
+    return GscTrackerService.addSite({
       projectId: context.projectId,
       organizationId: context.organizationId,
       userId: context.userId,
+      siteUrl: data.siteUrl,
+      accountId: data.accountId,
     });
-    return { enabled: true as const };
   });
 
 export const syncGscTracker = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
-  .validator(projectSchema)
-  .handler(async ({ context }) => {
+  .validator(siteSchema)
+  .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    await GscTrackerService.syncNow(context.projectId);
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    await GscTrackerService.syncNow(site);
     return { synced: true as const };
   });
 
 export const stopGscTracker = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
-  .validator(projectSchema)
-  .handler(async ({ context }) => {
+  .validator(siteSchema)
+  .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    await GscTrackerService.disable(context.projectId);
-    return { enabled: false as const };
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    await GscTrackerService.removeSite(site);
+    return { removed: true as const };
   });
 
 export const getGscTrackerOverview = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(rangeSchema)
-  .handler(({ data, context }) =>
-    GscTrackerService.getOverview(context.projectId, data.days),
-  );
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerService.getOverview(site.id, data.days);
+  });
 
 export const getGscTrackerList = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(listSchema)
-  .handler(({ data, context }) =>
-    GscTrackerService.compareQueries({
-      projectId: context.projectId,
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerService.compareQueries({
+      siteId: site.id,
       days: data.days,
       search: data.search,
       page: data.page,
-    }),
-  );
+    });
+  });
 
 export const getGscTrackerQuery = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(querySchema)
-  .handler(({ data, context }) =>
-    GscTrackerService.getQueryDetail({
-      projectId: context.projectId,
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerService.getQueryDetail({
+      siteId: site.id,
       query: data.query,
       days: data.days,
       from: data.from,
       to: data.to,
-    }),
-  );
+    });
+  });
 
 export const getGscTrackerCannibalization = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(rangeSchema)
-  .handler(({ data, context }) =>
-    GscTrackerService.getCannibalization(context.projectId, data.days),
-  );
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerService.getCannibalization(site.id, data.days);
+  });
 
 export const getGscTrackerKeywords = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(monthSchema)
-  .handler(({ data, context }) =>
-    GscTrackerKeywordService.getMonth(context.projectId, data.month),
-  );
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerKeywordService.getMonth(site.id, data.month);
+  });
 
 export const addGscTrackerKeywords = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(addKeywordsSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    return GscTrackerKeywordService.add(context.projectId, data.entries);
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerKeywordService.add(site.id, data.entries);
   });
 
 export const removeGscTrackerKeyword = createServerFn({ method: "POST" })
@@ -193,7 +247,11 @@ export const removeGscTrackerKeyword = createServerFn({ method: "POST" })
   .validator(keywordSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    await GscTrackerKeywordService.remove(context.projectId, data.id);
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    await GscTrackerKeywordService.remove(site.id, data.id);
     return { removed: true as const };
   });
 
@@ -202,7 +260,11 @@ export const updateGscTrackerSettings = createServerFn({ method: "POST" })
   .validator(settingsSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    await GscTrackerService.updateSettings(context.projectId, {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    await GscTrackerService.updateSettings(site, {
       positionFormat: data.positionFormat,
       explorerSort: data.explorerSort,
       dateFormat: data.dateFormat,
@@ -212,18 +274,26 @@ export const updateGscTrackerSettings = createServerFn({ method: "POST" })
 
 export const listGscTrackerTargets = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
-  .validator(projectSchema)
-  .handler(({ context }) =>
-    GscTrackerKeywordService.listTargets(context.projectId),
-  );
+  .validator(siteSchema)
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerKeywordService.listTargets(site.id);
+  });
 
 export const setGscTrackerKeywordStart = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(startDateSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
     await GscTrackerKeywordService.setStartDate({
-      projectId: context.projectId,
+      siteId: site.id,
       ids: data.ids,
       startDate: data.startDate,
     });
@@ -237,8 +307,12 @@ export const setGscTrackerKeywordCheckpoints = createServerFn({
   .validator(checkpointsSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
     await GscTrackerKeywordService.setCheckpoints({
-      projectId: context.projectId,
+      siteId: site.id,
       ids: data.ids,
       checkpoints: data.checkpoints,
     });
@@ -248,24 +322,32 @@ export const setGscTrackerKeywordCheckpoints = createServerFn({
 export const getGscTrackerKeywordChart = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(keywordChartSchema)
-  .handler(({ data, context }) =>
-    getKeywordChart({
-      projectId: context.projectId,
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return getKeywordChart({
+      siteId: site.id,
       id: data.id,
       days: data.days,
       from: data.from,
       to: data.to,
-    }),
-  );
+    });
+  });
 
 /** Follows Query Explorer queries, each with its top page, and tags them. */
 export const trackGscTrackerQueries = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(trackQueriesSchema)
-  .handler(({ data, context }) => {
+  .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
     return trackQueries({
-      projectId: context.projectId,
+      siteId: site.id,
       queries: data.queries,
       days: data.days,
       page: data.page,

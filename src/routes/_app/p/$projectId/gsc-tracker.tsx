@@ -1,44 +1,31 @@
-import {
-  createFileRoute,
-  stripSearchParams,
-  useNavigate,
-} from "@tanstack/react-router";
-import { z } from "zod";
-import { GscTrackerPage } from "@/client/features/gsc-tracker/GscTrackerPage";
+import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
+import { BackLink, PageHeader } from "@/client/components/PageHeader";
 import { pageHead } from "@/client/lib/pageHead";
-import { GSC_TRACKER_RANGE_DAYS, GSC_TRACKER_TABS } from "@/shared/gsc-tracker";
-
-const searchSchema = z.object({
-  tab: z.enum(GSC_TRACKER_TABS).catch("keywords"),
-  days: z
-    .union(GSC_TRACKER_RANGE_DAYS.map((days) => z.literal(days)))
-    .catch(28),
-});
 
 export const Route = createFileRoute("/_app/p/$projectId/gsc-tracker")({
   head: () => pageHead("GSC Tracker"),
-  validateSearch: searchSchema,
-  search: {
-    middlewares: [stripSearchParams({ tab: "keywords", days: 28 })],
-  },
-  component: GscTrackerRoute,
+  component: GscTrackerLayout,
 });
 
-function GscTrackerRoute() {
-  const { projectId } = Route.useParams();
-  const search = Route.useSearch();
-  const navigate = useNavigate({ from: Route.fullPath });
+function GscTrackerLayout() {
+  // Only a site's page has a site id, and only it links back.
+  const { projectId, siteId } = useParams({ strict: false });
   return (
-    <GscTrackerPage
-      projectId={projectId}
-      tab={search.tab}
-      days={search.days}
-      onChange={(update) => {
-        void navigate({
-          search: (prev) => ({ ...prev, ...update }),
-          replace: true,
-        });
-      }}
-    />
+    <div className="overflow-auto px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-8">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <PageHeader
+          title="GSC Tracker"
+          description="Follow phrases day by day on the URL that should rank, and keep up to 16 months of Search Console history per site."
+          backLink={
+            projectId && siteId ? (
+              <BackLink to="/p/$projectId/gsc-tracker" params={{ projectId }}>
+                Tracked sites
+              </BackLink>
+            ) : undefined
+          }
+        />
+        <Outlet />
+      </div>
+    </div>
   );
 }

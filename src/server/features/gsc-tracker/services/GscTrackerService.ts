@@ -10,7 +10,11 @@ import { getGoogleAccessMode } from "@/server/features/google/googleAccess";
 import { GscService } from "@/server/features/gsc/services/GscService";
 import { AppError } from "@/server/lib/errors";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
-import { GscTrackerRepository } from "../repositories/GscTrackerRepository";
+import {
+  GscTrackerRepository,
+  type GscTrackerSite,
+} from "../repositories/GscTrackerRepository";
+import { GscTrackerKeywordRepository } from "../repositories/GscTrackerKeywordRepository";
 import {
   daysBetween,
   gscTrackerFloor,
@@ -54,35 +58,29 @@ async function requireAvailable() {
     );
 }
 
-async function getStatus(projectId: string) {
-  const [available, tracker, connection] = await Promise.all([
-    isAvailable(),
-    GscTrackerRepository.get(projectId),
-    GscService.getConnection(projectId),
-  ]);
-  const now = new Date();
+/** How far a site's history reaches, and its display settings. */
+function siteState(site: GscTrackerSite, now = new Date()) {
   const floor = gscTrackerFloor(now);
   const latest = gscTrackerLatestDay(now);
-  const positionFormat: GscTrackerPositionFormat =
-    tracker?.positionFormat === "whole" ? "whole" : "decimal";
-  const explorerSort: GscTrackerSortKey =
-    GSC_TRACKER_SORT_KEYS.find((key) => key === tracker?.explorerSort) ??
-    "clicks";
-  const dateFormat: GscTrackerDateFormat =
-    tracker?.dateFormat === "mon-d" ? "mon-d" : "dd.mm";
   const storedDays =
-    tracker?.oldestDate && tracker.newestDate
-      ? daysBetween(tracker.oldestDate, tracker.newestDate)
+    site.oldestDate && site.newestDate
+      ? daysBetween(site.oldestDate, site.newestDate)
       : 0;
+  const positionFormat: GscTrackerPositionFormat =
+    site.positionFormat === "whole" ? "whole" : "decimal";
+  const explorerSort: GscTrackerSortKey =
+    GSC_TRACKER_SORT_KEYS.find((key) => key === site.explorerSort) ?? "clicks";
+  const dateFormat: GscTrackerDateFormat =
+    site.dateFormat === "mon-d" ? "mon-d" : "dd.mm";
   return {
-    available,
-    connected: Boolean(connection),
-    enabled: Boolean(tracker),
-    siteUrl: tracker?.siteUrl ?? connection?.siteUrl ?? null,
-    oldestDate: tracker?.oldestDate ?? null,
-    newestDate: tracker?.newestDate ?? null,
-    lastSyncedAt: tracker?.lastSyncedAt ?? null,
-    lastError: tracker?.lastError ?? null,
+    id: site.id,
+    siteUrl: site.siteUrl,
+    accountEmail: site.connectedAccountEmail,
+    usesProjectConnection: site.connectedByUserId === null,
+    oldestDate: site.oldestDate,
+    newestDate: site.newestDate,
+    lastSyncedAt: site.lastSyncedAt,
+    lastError: site.lastError,
     positionFormat,
     explorerSort,
     dateFormat,
@@ -90,59 +88,154 @@ async function getStatus(projectId: string) {
   };
 }
 
-async function enable(input: {
+/** Whether the tracker can run here, and the project's own connection,
+ *  which a project's first site can use. */
+async function getAvailability(projectId: string) {
+  const [available, connection] = await Promise.all([
+    isAvailable(),
+    GscService.getConnection(projectId),
+  ]);
+  return {
+    available,
+    connected: Boolean(connection),
+    projectSiteUrl: connection?.siteUrl ?? null,
+  };
+}
+
+/** A site of the project; NOT_FOUND when it belongs elsewhere or is gone. */
+async function requireSite(projectId: string, siteId: string) {
+  const site = await GscTrackerRepository.getForProject(projectId, siteId);
+  if (!site) throw new AppError("NOT_FOUND", "That site isn't tracked here.");
+  return site;
+}
+
+/** One site's state for its page. */
+async function getStatus(site: GscTrackerSite) {
+  return siteState(site);
+}
+
+/** The project's sites with the last 28 days against the 28 before, for
+ *  the site list. */
+async function listSites(projectId: string) {
+  const sites = await GscTrackerRepository.listForProject(projectId);
+  return Promise.all(
+    sites.map(async (site) => {
+      const [overview, keywords] = await Promise.all([
+        getOverview(site.id, 28),
+        GscTrackerKeywordRepository.list(site.id),
+      ]);
+      return {
+        ...siteState(site),
+        phrases: keywords.length,
+        current: overview?.current ?? null,
+        previous: overview?.previous ?? null,
+      };
+    }),
+  );
+}
+
+/**
+ * Starts tracking a property. With `accountId`, through that Google account
+ * or service account of the member (checked against the properties it can
+ * reach); without, through the project's Search Console connection.
+ */
+async function addSite(input: {
   projectId: string;
   organizationId: string;
   userId: string;
+  siteUrl?: string;
+  accountId?: string;
 }) {
   await requireAvailable();
-  const connection = await GscService.getConnection(input.projectId);
-  if (!connection)
-    throw new AppError(
-      "VALIDATION_ERROR",
-      "Connect Search Console to this project first.",
+  let access: {
+    siteUrl: string;
+    gscAccountId: string | null;
+    serviceAccountId: string | null;
+    connectedByUserId: string | null;
+    connectedAccountEmail: string | null;
+  };
+  if (input.accountId) {
+    const { accounts } = await GscService.listSitesForUserWithGrantStatus({
+      userId: input.userId,
+      organizationId: input.organizationId,
+    });
+    const account = accounts.find((item) => item.accountId === input.accountId);
+    const property = account?.sites.find(
+      (site) => site.siteUrl === input.siteUrl,
     );
-  const tracker = await GscTrackerRepository.create({
+    if (!account || !property)
+      throw new AppError(
+        "NOT_FOUND",
+        "That Search Console property isn't available on the chosen account.",
+      );
+    if (property.permissionLevel === "siteUnverifiedUser")
+      throw new AppError(
+        "FORBIDDEN",
+        "The chosen account doesn't have verified access to that property.",
+      );
+    access = {
+      siteUrl: property.siteUrl,
+      gscAccountId: account.accountId,
+      serviceAccountId:
+        account.kind === "service_account" ? account.accountId : null,
+      connectedByUserId: input.userId,
+      connectedAccountEmail: account.email,
+    };
+  } else {
+    const connection = await GscService.getConnection(input.projectId);
+    if (!connection)
+      throw new AppError(
+        "VALIDATION_ERROR",
+        "Connect Search Console to this project first, or pick an account.",
+      );
+    access = {
+      siteUrl: connection.siteUrl,
+      gscAccountId: null,
+      serviceAccountId: null,
+      connectedByUserId: null,
+      connectedAccountEmail: connection.connectedAccountEmail,
+    };
+  }
+  const site = await GscTrackerRepository.create({
     projectId: input.projectId,
     organizationId: input.organizationId,
-    siteUrl: connection.siteUrl,
     enabledByUserId: input.userId,
+    ...access,
   });
   // The first batch runs now so the page has recent days right away; the cron
   // fetches the rest of the history.
-  await syncTracker(tracker);
-  await syncKeywords(tracker);
+  await syncTracker(site);
+  await syncKeywords(site);
+  return { id: site.id };
 }
 
-async function syncNow(projectId: string) {
+async function syncNow(site: GscTrackerSite) {
   await requireAvailable();
-  const tracker = await GscTrackerRepository.get(projectId);
-  if (!tracker) throw new AppError("NOT_FOUND", "Tracking is off.");
-  await syncTracker(tracker);
-  await syncKeywords(tracker);
+  await syncTracker(site);
+  const fresh = await GscTrackerRepository.get(site.id);
+  if (fresh) await syncKeywords(fresh);
 }
 
-/** Project-wide display settings: how positions read (7.4 or 7), how day
+/** A site's display settings: how positions read (7.4 or 7), how day
  *  labels read (03.10 or Oct 3) and Query Explorer's default order. */
 async function updateSettings(
-  projectId: string,
+  site: GscTrackerSite,
   settings: {
     positionFormat?: GscTrackerPositionFormat;
     explorerSort?: GscTrackerSortKey;
     dateFormat?: GscTrackerDateFormat;
   },
 ) {
-  const tracker = await GscTrackerRepository.get(projectId);
-  if (!tracker) throw new AppError("NOT_FOUND", "Tracking is off.");
-  await GscTrackerRepository.update(projectId, settings);
+  await GscTrackerRepository.update(site.id, settings);
 }
 
-async function disable(projectId: string) {
-  await GscTrackerRepository.remove(projectId);
+/** Stops tracking a site and deletes its stored history. */
+async function removeSite(site: GscTrackerSite) {
+  await GscTrackerRepository.remove(site.id);
 }
 
-async function getOverview(projectId: string, days: number) {
-  const range = await periods(projectId, days);
+async function getOverview(siteId: string, days: number) {
+  const range = await periods(siteId, days);
   if (!range) return null;
   const totals = await db
     .select({
@@ -154,7 +247,7 @@ async function getOverview(projectId: string, days: number) {
     .from(gscTrackerTotals)
     .where(
       and(
-        eq(gscTrackerTotals.projectId, projectId),
+        eq(gscTrackerTotals.siteId, siteId),
         gte(gscTrackerTotals.date, range.previousStart),
         lte(gscTrackerTotals.date, range.currentEnd),
       ),
@@ -190,7 +283,7 @@ async function getOverview(projectId: string, days: number) {
 
 /** One query over the selected window: daily totals and the pages ranking. */
 async function getQueryDetail(input: {
-  projectId: string;
+  siteId: string;
   query: string;
   /** The last N days up to the newest stored day, or a custom range. */
   days?: number;
@@ -200,7 +293,7 @@ async function getQueryDetail(input: {
   const range =
     input.from && input.to
       ? customPeriods(input.from, input.to)
-      : await periods(input.projectId, input.days ?? 28);
+      : await periods(input.siteId, input.days ?? 28);
   if (!range) return null;
   const rows = await db
     .select({
@@ -218,7 +311,7 @@ async function getQueryDetail(input: {
     .innerJoin(gscTrackerPages, eq(gscTrackerPages.id, gscTrackerRows.pageId))
     .where(
       and(
-        eq(gscTrackerRows.projectId, input.projectId),
+        eq(gscTrackerRows.siteId, input.siteId),
         eq(gscTrackerQueries.query, input.query),
         gte(gscTrackerRows.date, range.currentStart),
         lte(gscTrackerRows.date, range.currentEnd),
@@ -262,12 +355,12 @@ async function getQueryDetail(input: {
 }
 
 /** Queries where more than one page shares the impressions. */
-async function getCannibalization(projectId: string, days: number) {
-  const range = await periods(projectId, days);
+async function getCannibalization(siteId: string, days: number) {
+  const range = await periods(siteId, days);
   if (!range) return null;
   const r = gscTrackerRows;
   const inWindow = and(
-    eq(r.projectId, projectId),
+    eq(r.siteId, siteId),
     gte(r.date, range.currentStart),
     lte(r.date, range.currentEnd),
   );
@@ -331,11 +424,14 @@ async function getCannibalization(projectId: string, days: number) {
 
 export const GscTrackerService = {
   isAvailable,
+  getAvailability,
+  requireSite,
   getStatus,
-  enable,
+  listSites,
+  addSite,
   syncNow,
   updateSettings,
-  disable,
+  removeSite,
   getOverview,
   compareQueries,
   getQueryDetail,

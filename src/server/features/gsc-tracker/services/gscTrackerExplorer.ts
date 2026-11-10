@@ -16,12 +16,12 @@ const LIST_LIMIT = 1000;
  * page earns and that page's numbers for it.
  */
 export async function compareQueries(input: {
-  projectId: string;
+  siteId: string;
   days: number;
   search?: string;
   page?: string;
 }) {
-  const range = await periods(input.projectId, input.days);
+  const range = await periods(input.siteId, input.days);
   if (!range) return null;
   const r = gscTrackerRows;
   const inCurrent = sql`${r.date} >= ${range.currentStart}`;
@@ -56,7 +56,7 @@ export async function compareQueries(input: {
     .innerJoin(gscTrackerPages, eq(gscTrackerPages.id, r.pageId))
     .where(
       and(
-        eq(r.projectId, input.projectId),
+        eq(r.siteId, input.siteId),
         gte(r.date, range.previousStart),
         lte(r.date, range.currentEnd),
         search
@@ -74,7 +74,7 @@ export async function compareQueries(input: {
   // Under a URL filter the rows only hold the matching pages; the URL count
   // stays site-wide, so count those queries' pages again without it.
   const siteUrls = page
-    ? await countQueryUrls(input.projectId, range, page)
+    ? await countQueryUrls(input.siteId, range, page)
     : null;
 
   return {
@@ -95,7 +95,7 @@ export async function compareQueries(input: {
 /** Pages each query reached in the current period, for the queries that
  *  reached a page whose URL contains `page`. */
 async function countQueryUrls(
-  projectId: string,
+  siteId: string,
   range: { currentStart: string; currentEnd: string },
   page: string,
 ): Promise<Map<number, number>> {
@@ -108,13 +108,13 @@ async function countQueryUrls(
     .from(r)
     .where(
       and(
-        eq(r.projectId, projectId),
+        eq(r.siteId, siteId),
         gte(r.date, range.currentStart),
         lte(r.date, range.currentEnd),
         sql`${r.queryId} in (
           select f.query_id from gsc_tracker_rows f
           join gsc_tracker_pages p on p.id = f.page_id
-          where f.project_id = ${projectId}
+          where f.site_id = ${siteId}
             and f.date >= ${range.currentStart}
             and f.date <= ${range.currentEnd}
             and lower(p.url) like ${`%${page}%`}

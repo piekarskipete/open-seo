@@ -6,7 +6,7 @@ import {
   gscTrackerKeywords,
   gscTrackerPages,
 } from "@/db/schema";
-import { GscTrackerRepository } from "./GscTrackerRepository";
+import { GscTrackerRepository, type SiteRef } from "./GscTrackerRepository";
 import { GscTrackerTagRepository } from "./GscTrackerTagRepository";
 
 export type GscTrackerKeyword = typeof gscTrackerKeywords.$inferSelect;
@@ -29,11 +29,11 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-async function list(projectId: string): Promise<GscTrackerKeyword[]> {
+async function list(siteId: string): Promise<GscTrackerKeyword[]> {
   return db
     .select()
     .from(gscTrackerKeywords)
-    .where(eq(gscTrackerKeywords.projectId, projectId))
+    .where(eq(gscTrackerKeywords.siteId, siteId))
     .orderBy(
       gscTrackerKeywords.createdAt,
       gscTrackerKeywords.query,
@@ -43,16 +43,17 @@ async function list(projectId: string): Promise<GscTrackerKeyword[]> {
 
 /** Follows phrase/URL pairs; a pair already followed is left as it is. */
 async function upsertMany(
-  projectId: string,
+  site: SiteRef,
   entries: { query: string; targetUrl: string }[],
 ): Promise<void> {
-  for (const part of chunk(entries, Math.floor(DB_BATCH_SIZE / 4))) {
+  for (const part of chunk(entries, Math.floor(DB_BATCH_SIZE / 5))) {
     await db
       .insert(gscTrackerKeywords)
       .values(
         part.map((entry) => ({
           id: crypto.randomUUID(),
-          projectId,
+          projectId: site.projectId,
+          siteId: site.id,
           query: entry.query,
           targetUrl: entry.targetUrl,
         })),
@@ -61,7 +62,7 @@ async function upsertMany(
   }
 }
 
-async function remove(projectId: string, id: string): Promise<void> {
+async function remove(siteId: string, id: string): Promise<void> {
   await GscTrackerTagRepository.clearKeyword(id);
   await db
     .delete(gscTrackerKeywordDays)
@@ -69,10 +70,7 @@ async function remove(projectId: string, id: string): Promise<void> {
   await db
     .delete(gscTrackerKeywords)
     .where(
-      and(
-        eq(gscTrackerKeywords.id, id),
-        eq(gscTrackerKeywords.projectId, projectId),
-      ),
+      and(eq(gscTrackerKeywords.id, id), eq(gscTrackerKeywords.siteId, siteId)),
     );
 }
 
@@ -90,13 +88,13 @@ async function updateRange(
 
 /** Replaces one day for the given phrases: every page Search Console showed. */
 async function replaceDay(input: {
-  projectId: string;
+  site: SiteRef;
   keywordIds: string[];
   date: string;
   rows: KeywordDayRow[];
 }): Promise<void> {
   const pageIds = await GscTrackerRepository.resolveKeys(
-    input.projectId,
+    input.site,
     "page",
     input.rows.map((row) => row.page),
   );
@@ -129,12 +127,8 @@ async function replaceDay(input: {
   ]);
 }
 
-/** Every stored page-day for the project's phrases between two dates. */
-async function listDays(input: {
-  projectId: string;
-  from: string;
-  to: string;
-}) {
+/** Every stored page-day for the site's phrases between two dates. */
+async function listDays(input: { siteId: string; from: string; to: string }) {
   return db
     .select({
       keywordId: gscTrackerKeywordDays.keywordId,
@@ -155,7 +149,7 @@ async function listDays(input: {
     )
     .where(
       and(
-        eq(gscTrackerKeywords.projectId, input.projectId),
+        eq(gscTrackerKeywords.siteId, input.siteId),
         gte(gscTrackerKeywordDays.date, input.from),
         lte(gscTrackerKeywordDays.date, input.to),
       ),
@@ -166,7 +160,7 @@ async function listDays(input: {
  *  day it was added. */
 /** Sets the start date of several phrases of the project at once. */
 async function setStartDate(input: {
-  projectId: string;
+  siteId: string;
   ids: string[];
   startDate: string | null;
 }): Promise<void> {
@@ -177,7 +171,7 @@ async function setStartDate(input: {
       .where(
         and(
           inArray(gscTrackerKeywords.id, part),
-          eq(gscTrackerKeywords.projectId, input.projectId),
+          eq(gscTrackerKeywords.siteId, input.siteId),
         ),
       );
   }
@@ -185,7 +179,7 @@ async function setStartDate(input: {
 
 /** Sets up to two checkpoint days (earliest first) on several phrases. */
 async function setCheckpoints(input: {
-  projectId: string;
+  siteId: string;
   ids: string[];
   checkpoints: [string | null, string | null];
 }): Promise<void> {
@@ -199,7 +193,7 @@ async function setCheckpoints(input: {
       .where(
         and(
           inArray(gscTrackerKeywords.id, part),
-          eq(gscTrackerKeywords.projectId, input.projectId),
+          eq(gscTrackerKeywords.siteId, input.siteId),
         ),
       );
   }

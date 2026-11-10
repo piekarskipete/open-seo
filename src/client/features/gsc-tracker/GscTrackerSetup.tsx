@@ -1,17 +1,15 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { History, RefreshCw, Settings } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { RefreshCw, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/client/components/ConfirmDialog";
-import { EmptyState } from "@/client/components/EmptyState";
-import { PermissionHint } from "@/client/components/PermissionHint";
 import { Alert, AlertDescription } from "@/client/components/ui/alert";
 import { Button } from "@/client/components/ui/button";
 import {
   formatDay,
   shiftDay,
 } from "@/client/features/gsc-tracker/gscTrackerView";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import {
   Popover,
@@ -23,7 +21,6 @@ import {
 } from "@/client/components/ui/popover";
 import {
   updateGscTrackerSettings,
-  startGscTracker,
   stopGscTracker,
   syncGscTracker,
   type getGscTrackerStatus,
@@ -34,58 +31,7 @@ import type {
   GscTrackerSortKey,
 } from "@/shared/gsc-tracker";
 
-// Turning the tracker on and off, and its sync status.
-
-export function StartTracking({
-  projectId,
-  canManage,
-  siteUrl,
-}: {
-  projectId: string;
-  canManage: boolean;
-  siteUrl: string | null;
-}) {
-  const queryClient = useQueryClient();
-  const start = useMutation({
-    meta: { errorToast: false },
-    mutationFn: () => startGscTracker({ data: { projectId } }),
-    onSuccess: () => {
-      toast.success("Tracking started");
-      void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerStatus", projectId],
-      });
-    },
-  });
-  return (
-    <EmptyState
-      variant="card"
-      icon={History}
-      title="Keep your Search Console history"
-      description={
-        <>
-          OpenSEO fetches{" "}
-          {siteUrl ? <strong>{siteUrl}</strong> : "your property"} day by day,
-          up to 16 months back, and keeps it up to date. Trends, winners and
-          losers, and competing pages then load from your own database.
-          {start.error ? (
-            <span role="alert" className="mt-2 block text-destructive">
-              {getStandardErrorMessage(start.error)}
-            </span>
-          ) : null}
-        </>
-      }
-      action={
-        canManage ? (
-          <Button onClick={() => start.mutate()} pending={start.isPending}>
-            Start tracking
-          </Button>
-        ) : (
-          <PermissionHint action="start tracking" />
-        )
-      }
-    />
-  );
-}
+// A tracked site's sync status, settings, and removal.
 
 type Status = Awaited<ReturnType<typeof getGscTrackerStatus>>;
 
@@ -97,24 +43,32 @@ export function TrackerStatus({
   status: Status;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const siteId = status.id;
   const [confirmStop, setConfirmStop] = useState(false);
   const refresh = () =>
     queryClient.invalidateQueries({
       predicate: (query) =>
         typeof query.queryKey[0] === "string" &&
         query.queryKey[0].startsWith("gscTracker") &&
-        query.queryKey[1] === projectId,
+        query.queryKey[1] === siteId,
     });
   const sync = useMutation({
-    mutationFn: () => syncGscTracker({ data: { projectId } }),
+    mutationFn: () => syncGscTracker({ data: { projectId, siteId } }),
     onSuccess: () => void refresh(),
   });
   const stop = useMutation({
-    mutationFn: () => stopGscTracker({ data: { projectId } }),
+    mutationFn: () => stopGscTracker({ data: { projectId, siteId } }),
     onSuccess: () => {
-      toast.success("Tracking stopped and history deleted");
+      toast.success("Site removed and its history deleted");
       setConfirmStop(false);
-      void refresh();
+      void queryClient.invalidateQueries({
+        queryKey: ["gscTrackerSites", projectId],
+      });
+      void navigate({
+        to: "/p/$projectId/gsc-tracker",
+        params: { projectId },
+      });
     },
   });
 
@@ -155,6 +109,7 @@ export function TrackerStatus({
             </Button>
             <TrackerSettings
               projectId={projectId}
+              siteId={siteId}
               positionFormat={status.positionFormat}
               explorerSort={status.explorerSort}
               dateFormat={status.dateFormat}
@@ -165,7 +120,7 @@ export function TrackerStatus({
               className="text-muted-foreground hover:text-destructive"
               onClick={() => setConfirmStop(true)}
             >
-              Stop tracking
+              Remove site
             </Button>
           </div>
         ) : null}
@@ -177,15 +132,16 @@ export function TrackerStatus({
       ) : null}
       {confirmStop ? (
         <ConfirmDialog
-          title="Stop tracking?"
-          confirmLabel="Stop and delete history"
+          title={`Remove ${status.siteUrl}?`}
+          confirmLabel="Remove and delete history"
           destructive
           pending={stop.isPending}
           onConfirm={() => stop.mutate()}
           onClose={() => setConfirmStop(false)}
         >
-          This deletes the stored Search Console history for this project.
-          Search Console itself is not affected, and you can start again later.
+          This deletes the stored Search Console history, followed phrases and
+          tags of this site. Search Console itself is not affected, and you can
+          add the site again later.
         </ConfirmDialog>
       ) : null}
     </div>
@@ -222,11 +178,13 @@ type Settings = {
 /** Project-wide display settings for the tracker. */
 function TrackerSettings({
   projectId,
+  siteId,
   positionFormat,
   explorerSort,
   dateFormat,
 }: {
   projectId: string;
+  siteId: string;
   positionFormat: GscTrackerPositionFormat;
   explorerSort: GscTrackerSortKey;
   dateFormat: GscTrackerDateFormat;
@@ -234,10 +192,10 @@ function TrackerSettings({
   const queryClient = useQueryClient();
   const save = useMutation({
     mutationFn: (settings: Settings) =>
-      updateGscTrackerSettings({ data: { projectId, ...settings } }),
+      updateGscTrackerSettings({ data: { projectId, siteId, ...settings } }),
     onSuccess: () =>
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerStatus", projectId],
+        queryKey: ["gscTrackerStatus", siteId],
       }),
   });
   // Show a choice right away while it saves.

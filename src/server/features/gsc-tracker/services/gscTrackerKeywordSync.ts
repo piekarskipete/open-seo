@@ -4,14 +4,14 @@ import {
 } from "../repositories/GscTrackerKeywordRepository";
 import {
   GscTrackerRepository,
-  type GscTrackerProject,
+  type GscTrackerSite,
 } from "../repositories/GscTrackerRepository";
+import { querySite } from "./gscTrackerAccess";
 import { gscTrackerLatestDay } from "./gscTrackerDates";
 import { planSyncDays, syncErrorMessage } from "./gscTrackerPlan";
-import { GscService } from "@/server/features/gsc/services/GscService";
 import { describeError } from "@/server/lib/errors";
 
-// Days fetched per project per tick for followed phrases. Each day is its own
+// Days fetched per site per tick for followed phrases. Each day is its own
 // Search Console request, limited to that one day, so a phrase's position is
 // that day's alone, never an average across days.
 const KEYWORD_DAYS_PER_TICK = 8;
@@ -92,7 +92,7 @@ export function planKeywordDays(
   };
 }
 
-async function fetchDay(projectId: string, batch: DayBatch) {
+async function fetchDay(site: GscTrackerSite, batch: DayBatch) {
   for (const group of patternGroups(batch.keywords)) {
     // One phrase may be followed for several URLs: its rows go to each.
     const byQuery = new Map<string, GscTrackerKeyword[]>();
@@ -101,8 +101,7 @@ async function fetchDay(projectId: string, batch: DayBatch) {
         ...(byQuery.get(keyword.query) ?? []),
         keyword,
       ]);
-    const { rows } = await GscService.getPerformance({
-      projectId,
+    const { rows } = await querySite(site, {
       startDate: batch.date,
       endDate: batch.date,
       dimensions: ["query", "page"],
@@ -115,7 +114,7 @@ async function fetchDay(projectId: string, batch: DayBatch) {
       rowLimit: ROW_LIMIT,
     });
     await GscTrackerKeywordRepository.replaceDay({
-      projectId,
+      site,
       keywordIds: group.map((keyword) => keyword.id),
       date: batch.date,
       rows: rows.flatMap((row) => {
@@ -169,22 +168,22 @@ async function recordProgress(
 
 /** Fetches one batch of days for a project's followed phrases. */
 export async function syncKeywords(
-  tracker: GscTrackerProject,
+  tracker: GscTrackerSite,
   now = new Date(),
 ): Promise<void> {
-  const keywords = await GscTrackerKeywordRepository.list(tracker.projectId);
+  const keywords = await GscTrackerKeywordRepository.list(tracker.id);
   if (keywords.length === 0) return;
   const { forward, backward } = planKeywordDays(keywords, now);
   if (forward.length === 0 && backward.length === 0) return;
   try {
     for (const batch of [...forward, ...backward])
-      await fetchDay(tracker.projectId, batch);
+      await fetchDay(tracker, batch);
   } catch (error) {
-    await GscTrackerRepository.update(tracker.projectId, {
+    await GscTrackerRepository.update(tracker.id, {
       lastError: syncErrorMessage(error),
     });
     console.error("[gsc-tracker] keyword sync failed", {
-      projectId: tracker.projectId,
+      siteId: tracker.id,
       error: describeError(error),
     });
     return;

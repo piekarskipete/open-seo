@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { runBatch } from "@/db/runBatch";
 import type * as ServiceModule from "./GscTrackerService";
+import type * as SiteModule from "../repositories/GscTrackerRepository";
 import type * as KeywordModule from "./GscTrackerKeywordService";
 import type * as TrackModule from "./gscTrackerTrackQueries";
 import type * as TagModule from "./GscTrackerTagService";
@@ -26,6 +27,15 @@ vi.mock("@/server/features/gsc/services/GscService", () => ({
   GscService: gsc,
   isExpectedGrantFailure: () => false,
 }));
+vi.mock("./gscTrackerAccess", () => ({
+  // Each site's request, as Search Console would answer it for its property.
+  querySite: (site: { projectId: string; siteUrl: string }, input: object) =>
+    gsc.getPerformance({
+      ...input,
+      projectId: site.projectId,
+      siteUrl: site.siteUrl,
+    }),
+}));
 vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: async () => false,
   getOptionalEnvValue: async () => undefined,
@@ -37,6 +47,7 @@ vi.mock("@/server/features/google/googleAccess", () => ({
 let client: Client;
 const directory = mkdtempSync(join(tmpdir(), "gsc-tracker-track-"));
 let service: typeof ServiceModule.GscTrackerService;
+let sites: typeof SiteModule.GscTrackerRepository;
 let keywords: typeof KeywordModule.GscTrackerKeywordService;
 let trackQueries: typeof TrackModule.trackQueries;
 let tags: typeof TagModule.GscTrackerTagService;
@@ -76,11 +87,15 @@ beforeAll(async () => {
     "drizzle/sqlite/0075_gsc_tracker_keyword_start.sql",
     "drizzle/sqlite/0076_gsc_tracker_tags.sql",
     "drizzle/sqlite/0077_gsc_tracker_checkpoints.sql",
+    "drizzle/sqlite/0078_gsc_tracker_sites.sql",
+    "drizzle/sqlite/0079_gsc_tracker_drop_projects.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
     );
   ({ GscTrackerService: service } = await import("./GscTrackerService"));
+  ({ GscTrackerRepository: sites } =
+    await import("../repositories/GscTrackerRepository"));
   ({ GscTrackerKeywordService: keywords } =
     await import("./GscTrackerKeywordService"));
   ({ trackQueries } = await import("./gscTrackerTrackQueries"));
@@ -92,9 +107,21 @@ afterAll(() => {
   rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
 });
 
+/** The project's first site, as the migration makes it: id = project id. */
+async function enableSite() {
+  const site = await sites.create({
+    id: "p1",
+    projectId: "p1",
+    organizationId: "org1",
+    siteUrl: "sc-domain:example.com",
+    enabledByUserId: "u1",
+  });
+  await service.syncNow(site);
+}
+
 beforeEach(async () => {
   await client.executeMultiple(
-    "DELETE FROM gsc_tracker_keyword_tags; DELETE FROM gsc_tracker_tags; DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_projects;",
+    "DELETE FROM gsc_tracker_keyword_tags; DELETE FROM gsc_tracker_tags; DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_sites;",
   );
   gsc.getConnection.mockResolvedValue({ siteUrl: "sc-domain:example.com" });
   gsc.getPerformance.mockImplementation(
@@ -151,15 +178,11 @@ it("follows selected queries with their top page, tags, start and checkpoints", 
         position: 5,
       },
     ];
-    await service.enable({
-      projectId: "p1",
-      organizationId: "org1",
-      userId: "u1",
-    });
+    await enableSite();
 
     // "shoes" goes with page b (more clicks); "socks" has no page.
     const result = await trackQueries({
-      projectId: "p1",
+      siteId: "p1",
       queries: ["shoes", "Boots", "socks"],
       days: 7,
       tags: ["Blog"],
@@ -191,7 +214,7 @@ it("follows selected queries with their top page, tags, start and checkpoints", 
 
     // A URL filter picks the target among matching pages only.
     const filtered = await trackQueries({
-      projectId: "p1",
+      siteId: "p1",
       queries: ["shoes"],
       days: 7,
       page: "/A",

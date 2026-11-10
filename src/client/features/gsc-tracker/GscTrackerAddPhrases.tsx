@@ -13,6 +13,7 @@ import {
 import { Textarea } from "@/client/components/ui/textarea";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { addGscTrackerKeywords } from "@/serverFunctions/gscTracker";
+import { useSiteId } from "@/client/features/gsc-tracker/gscTrackerView";
 
 /** One line per phrase: "phrase | https://target-url" (a tab or ";" works too). */
 function parseEntries(text: string) {
@@ -35,12 +36,14 @@ export function AddPhrasesDialog({
   projectId: string;
   onClose: () => void;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const { entries, invalid } = parseEntries(text);
   const add = useMutation({
     meta: { errorToast: false },
-    mutationFn: () => addGscTrackerKeywords({ data: { projectId, entries } }),
+    mutationFn: () =>
+      addGscTrackerKeywords({ data: { projectId, siteId, entries } }),
     onSuccess: (saved) => {
       toast.success(
         `${saved.added} phrase${saved.added === 1 ? "" : "s"} added${
@@ -48,7 +51,7 @@ export function AddPhrasesDialog({
         }`,
       );
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywords", projectId],
+        queryKey: ["gscTrackerKeywords", siteId],
       });
       onClose();
     },

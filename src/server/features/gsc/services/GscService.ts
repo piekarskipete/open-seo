@@ -292,8 +292,9 @@ async function removeServiceAccount(input: {
 async function disconnect(input: { projectId: string }): Promise<void> {
   await GscConnectionRepository.deleteByProjectId(input.projectId);
   await DashboardCacheService.deleteGscCache(input.projectId);
-  // Stored Search Console history leaves with the connection.
-  await GscTrackerRepository.remove(input.projectId);
+  // Tracked sites that reached Google through this connection leave with it,
+  // with their stored history; sites added with their own account stay.
+  await GscTrackerRepository.removeProjectConnectionSites(input.projectId);
 }
 
 /** Pass-through of GSC `searchAnalytics.query` for a project's connected property. */

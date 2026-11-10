@@ -32,7 +32,7 @@ const MAX_RANGE_DAYS = 500;
  * and per-day averages, and the previous period of the same length.
  */
 export async function getKeywordChart(input: {
-  projectId: string;
+  siteId: string;
   id: string;
   /** The last N days up to the newest fetched day... */
   days?: number;
@@ -41,7 +41,7 @@ export async function getKeywordChart(input: {
   to?: string;
   now?: Date;
 }) {
-  const keywords = await GscTrackerKeywordRepository.list(input.projectId);
+  const keywords = await GscTrackerKeywordRepository.list(input.siteId);
   const keyword = keywords.find((entry) => entry.id === input.id);
   if (!keyword) throw new AppError("NOT_FOUND", "That phrase isn't followed.");
 

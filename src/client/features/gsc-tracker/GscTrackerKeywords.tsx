@@ -29,6 +29,7 @@ import {
   type Tag,
 } from "@/client/features/gsc-tracker/gscTrackerTags";
 import { getGscTrackerKeywords } from "@/serverFunctions/gscTracker";
+import { useSiteId } from "@/client/features/gsc-tracker/gscTrackerView";
 
 type Month = Awaited<ReturnType<typeof getGscTrackerKeywords>>;
 type Keyword = Month["keywords"][number];
@@ -48,6 +49,7 @@ export function KeywordsTab({
   projectId: string;
   canManage: boolean;
 }) {
+  const siteId = useSiteId();
   const [month, setMonth] = useState(() =>
     new Date().toISOString().slice(0, 7),
   );
@@ -56,10 +58,11 @@ export function KeywordsTab({
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const result = useQuery({
-    queryKey: ["gscTrackerKeywords", projectId, month],
-    queryFn: () => getGscTrackerKeywords({ data: { projectId, month } }),
+    queryKey: ["gscTrackerKeywords", siteId, month],
+    queryFn: () =>
+      getGscTrackerKeywords({ data: { projectId, siteId, month } }),
   });
-  const tags = useTags(projectId).data ?? [];
+  const tags = useTags(projectId, siteId).data ?? [];
   // A deleted tag drops out of the filter.
   const activeFilter = tagFilter.filter((id) =>
     tags.some((tag) => tag.id === id),

@@ -14,6 +14,7 @@ import {
   formatPosition,
   useDateFormat,
   usePositionFormat,
+  useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import {
   removeGscTrackerKeyword,
@@ -114,6 +115,7 @@ export function KeywordDetail({
   days: string[];
   canManage: boolean;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const [confirmStop, setConfirmStop] = useState(false);
   const outranked = new Set(keyword.outrankedDays);
@@ -121,12 +123,12 @@ export function KeywordDetail({
   const stronger = keyword.pages.filter((page) => page.stronger);
   const remove = useMutation({
     mutationFn: () =>
-      removeGscTrackerKeyword({ data: { projectId, id: keyword.id } }),
+      removeGscTrackerKeyword({ data: { projectId, siteId, id: keyword.id } }),
     onSuccess: () => {
       toast.success(`Stopped following “${keyword.query}”`);
       setConfirmStop(false);
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywords", projectId],
+        queryKey: ["gscTrackerKeywords", siteId],
       });
     },
   });

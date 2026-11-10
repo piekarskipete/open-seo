@@ -21,6 +21,7 @@ import {
   sortRows,
   type ListFilter,
   type SortState,
+  useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getGscTrackerList } from "@/serverFunctions/gscTracker";
 import type {
@@ -49,6 +50,7 @@ export function ExplorerTab({
   /** Members who manage integrations can add queries to the tracker. */
   canManage: boolean;
 }) {
+  const siteId = useSiteId();
   const [selection, setSelection] = useState<RowSelectionState>({});
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
@@ -64,11 +66,12 @@ export function ExplorerTab({
   // for when they come back.
   const deferredPage = useDeferredValue(page.trim());
   const list = useQuery({
-    queryKey: ["gscTrackerList", projectId, days, deferredSearch, deferredPage],
+    queryKey: ["gscTrackerList", siteId, days, deferredSearch, deferredPage],
     queryFn: () =>
       getGscTrackerList({
         data: {
           projectId,
+          siteId,
           days,
           search: deferredSearch || undefined,
           page: deferredPage || undefined,

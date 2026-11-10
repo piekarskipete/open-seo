@@ -1,12 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireOrgPermission } from "@/server/auth/org-gate";
+import { GscTrackerService } from "@/server/features/gsc-tracker/services/GscTrackerService";
 import { GscTrackerTagService } from "@/server/features/gsc-tracker/services/GscTrackerTagService";
 import { requireProjectContext } from "@/serverFunctions/middleware";
 import { GSC_TRACKER_TAG_NAME_MAX } from "@/shared/gsc-tracker";
 import { TAG_COLOR_KEYS } from "@/shared/tag-colors";
 
-const projectSchema = z.object({ projectId: z.string().min(1) });
+const projectSchema = z.object({
+  projectId: z.string().min(1),
+  siteId: z.string().min(1),
+});
 const nameSchema = z.string().max(GSC_TRACKER_TAG_NAME_MAX * 2);
 const updateSchema = projectSchema.extend({
   tagId: z.string().min(1),
@@ -23,15 +27,25 @@ const applySchema = projectSchema.extend({
 export const listGscTrackerTags = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(projectSchema)
-  .handler(({ context }) => GscTrackerTagService.list(context.projectId));
+  .handler(async ({ data, context }) => {
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    return GscTrackerTagService.list(site.id);
+  });
 
 export const updateGscTrackerTag = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(updateSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
     await GscTrackerTagService.update({
-      projectId: context.projectId,
+      siteId: site.id,
       id: data.tagId,
       name: data.name,
       color: data.color,
@@ -44,7 +58,11 @@ export const deleteGscTrackerTag = createServerFn({ method: "POST" })
   .validator(removeSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    await GscTrackerTagService.remove(context.projectId, data.tagId);
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    await GscTrackerTagService.remove(site.id, data.tagId);
     return { removed: true as const };
   });
 
@@ -52,10 +70,14 @@ export const deleteGscTrackerTag = createServerFn({ method: "POST" })
 export const applyGscTrackerKeywordTags = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(applySchema)
-  .handler(({ data, context }) => {
+  .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
     return GscTrackerTagService.applyToKeywords({
-      projectId: context.projectId,
+      siteId: site.id,
       keywordIds: data.keywordIds,
       addTags: data.addTags,
       removeTagIds: data.removeTagIds,

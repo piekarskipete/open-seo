@@ -15,10 +15,10 @@ export function matchesTagFilter(
   return tagIds.some((id) => filter.includes(id));
 }
 
-export function useTags(projectId: string) {
+export function useTags(projectId: string, siteId: string) {
   return useQuery({
-    queryKey: ["gscTrackerTags", projectId],
-    queryFn: () => listGscTrackerTags({ data: { projectId } }),
+    queryKey: ["gscTrackerTags", siteId],
+    queryFn: () => listGscTrackerTags({ data: { projectId, siteId } }),
   });
 }
 

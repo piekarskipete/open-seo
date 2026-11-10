@@ -36,6 +36,13 @@ export const METRIC_LABELS: Record<Metric, string> = {
 
 export const integer = new Intl.NumberFormat("en-US");
 
+/** The tracked site the page shows, set by the site page. */
+export const SiteContext = createContext<string>("");
+
+export function useSiteId(): string {
+  return useContext(SiteContext);
+}
+
 /** The project's position format, set by the tracker page. */
 export const PositionFormatContext =
   createContext<GscTrackerPositionFormat>("decimal");

@@ -42,8 +42,8 @@ export function customPeriods(from: string, to: string) {
 }
 
 /** The selected window ending at the newest stored day, and the one before. */
-export async function periods(projectId: string, days: number) {
-  const tracker = await GscTrackerRepository.get(projectId);
+export async function periods(siteId: string, days: number) {
+  const tracker = await GscTrackerRepository.get(siteId);
   if (!tracker?.newestDate) return null;
   const currentEnd = tracker.newestDate;
   const currentStart = addDays(currentEnd, -(days - 1));

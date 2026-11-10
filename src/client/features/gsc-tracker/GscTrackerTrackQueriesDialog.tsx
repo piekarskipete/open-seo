@@ -22,6 +22,7 @@ import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { trackGscTrackerQueries } from "@/serverFunctions/gscTracker";
 import type { GscTrackerRangeDays } from "@/shared/gsc-tracker";
 import { parseSavedKeywordTagInput } from "@/shared/saved-keyword-tags";
+import { useSiteId } from "@/client/features/gsc-tracker/gscTrackerView";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -46,9 +47,10 @@ export function TrackQueriesDialog({
   onDone: () => void;
   onClose: () => void;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const tags = useTags(projectId).data ?? [];
+  const tags = useTags(projectId, siteId).data ?? [];
   const [picked, setPicked] = useState<string[]>([]);
   const [newTags, setNewTags] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -63,6 +65,7 @@ export function TrackQueriesDialog({
       trackGscTrackerQueries({
         data: {
           projectId,
+          siteId,
           days,
           queries,
           page: page || undefined,
@@ -91,15 +94,15 @@ export function TrackQueriesDialog({
           label: "Open",
           onClick: () =>
             void navigate({
-              to: "/p/$projectId/gsc-tracker",
-              params: { projectId },
+              to: "/p/$projectId/gsc-tracker/$siteId",
+              params: { projectId, siteId },
               search: { tab: "keywords", days: 28 },
             }),
         },
       });
-      refreshTags(queryClient, projectId);
+      refreshTags(queryClient, siteId);
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerTargets", projectId],
+        queryKey: ["gscTrackerTargets", siteId],
       });
       onDone();
     },

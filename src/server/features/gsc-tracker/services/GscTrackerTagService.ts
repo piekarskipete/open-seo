@@ -1,5 +1,9 @@
 import { AppError } from "@/server/lib/errors";
 import { GscTrackerKeywordRepository } from "../repositories/GscTrackerKeywordRepository";
+import {
+  GscTrackerRepository,
+  type GscTrackerSite,
+} from "../repositories/GscTrackerRepository";
 import { GscTrackerTagRepository } from "../repositories/GscTrackerTagRepository";
 import { GSC_TRACKER_TAG_NAME_MAX } from "@/shared/gsc-tracker";
 import { normalizeSavedKeywordTags } from "@/shared/saved-keyword-tags";
@@ -43,10 +47,10 @@ function cleanName(name: string): string {
 }
 
 /** The project's tags with how many phrases carry each, by name. */
-async function list(projectId: string) {
+async function list(siteId: string) {
   const [tags, assignments] = await Promise.all([
-    GscTrackerTagRepository.list(projectId),
-    GscTrackerTagRepository.listAssignments(projectId),
+    GscTrackerTagRepository.list(siteId),
+    GscTrackerTagRepository.listAssignments(siteId),
   ]);
   const counts = new Map<string, number>();
   for (const { tagId } of assignments)
@@ -61,12 +65,12 @@ async function list(projectId: string) {
 }
 
 async function update(input: {
-  projectId: string;
+  siteId: string;
   id: string;
   name?: string;
   color?: TagColorKey;
 }) {
-  const tags = await GscTrackerTagRepository.list(input.projectId);
+  const tags = await GscTrackerTagRepository.list(input.siteId);
   if (!tags.some((tag) => tag.id === input.id))
     throw new AppError("NOT_FOUND", "That tag no longer exists.");
   const name = input.name === undefined ? undefined : cleanName(input.name);
@@ -79,14 +83,14 @@ async function update(input: {
     )
   )
     throw new AppError("CONFLICT", `A tag named “${name}” already exists.`);
-  await GscTrackerTagRepository.update(input.projectId, input.id, {
+  await GscTrackerTagRepository.update(input.siteId, input.id, {
     name,
     color: input.color,
   });
 }
 
-async function remove(projectId: string, id: string) {
-  await GscTrackerTagRepository.remove(projectId, id);
+async function remove(siteId: string, id: string) {
+  await GscTrackerTagRepository.remove(siteId, id);
 }
 
 /**
@@ -95,14 +99,14 @@ async function remove(projectId: string, id: string) {
  * are ignored.
  */
 async function applyToKeywords(input: {
-  projectId: string;
+  siteId: string;
   keywordIds: string[];
   addTags?: string[];
   removeTagIds?: string[];
 }) {
   const [tags, keywords] = await Promise.all([
-    GscTrackerTagRepository.list(input.projectId),
-    GscTrackerKeywordRepository.list(input.projectId),
+    GscTrackerTagRepository.list(input.siteId),
+    GscTrackerKeywordRepository.list(input.siteId),
   ]);
   const own = new Set(keywords.map((keyword) => keyword.id));
   const ids = [...new Set(input.keywordIds)].filter((id) => own.has(id));
@@ -113,18 +117,22 @@ async function applyToKeywords(input: {
   );
   const toAdd: string[] = [];
   let count = tags.length;
+  let site: GscTrackerSite | null = null;
   for (const tag of normalizeSavedKeywordTags(input.addTags)) {
     let id = byName.get(tag.normalizedName);
     if (!id) {
       if (count >= MAX_TAGS)
         throw new AppError(
           "VALIDATION_ERROR",
-          `A project can have up to ${MAX_TAGS} tags.`,
+          `A site can have up to ${MAX_TAGS} tags.`,
         );
+      site ??= await GscTrackerRepository.get(input.siteId);
+      if (!site) throw new AppError("NOT_FOUND", "Tracking is off.");
       const newId = crypto.randomUUID();
       await GscTrackerTagRepository.create({
         id: newId,
-        projectId: input.projectId,
+        projectId: site.projectId,
+        siteId: input.siteId,
         name: cleanName(tag.name),
         color: resolveTagColor({ id: newId }),
       });
@@ -143,14 +151,12 @@ async function applyToKeywords(input: {
 }
 
 /** Tag ids per phrase, for the Keywords tab. */
-async function tagsByKeyword(
-  projectId: string,
-): Promise<Map<string, string[]>> {
+async function tagsByKeyword(siteId: string): Promise<Map<string, string[]>> {
   const byKeyword = new Map<string, string[]>();
   for (const {
     keywordId,
     tagId,
-  } of await GscTrackerTagRepository.listAssignments(projectId)) {
+  } of await GscTrackerTagRepository.listAssignments(siteId)) {
     const ids = byKeyword.get(keywordId) ?? [];
     ids.push(tagId);
     byKeyword.set(keywordId, ids);

@@ -29,6 +29,7 @@ import {
   METRICS,
   useFormatMetric,
   type Metric,
+  useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import {
   getGscTrackerKeywordChart,
@@ -52,13 +53,14 @@ export function KeywordChartDialog({
   keyword: Keyword;
   onClose: () => void;
 }) {
+  const siteId = useSiteId();
   const [range, setRange] = useState<ChartRange>(() => initialRange());
   const request = rangeRequest(range);
   const chart = useQuery({
-    queryKey: ["gscTrackerKeywordChart", projectId, keyword.id, request],
+    queryKey: ["gscTrackerKeywordChart", siteId, keyword.id, request],
     queryFn: () =>
       getGscTrackerKeywordChart({
-        data: { projectId, id: keyword.id, ...request },
+        data: { projectId, siteId, id: keyword.id, ...request },
       }),
     enabled: request !== null,
     placeholderData: keepPreviousData,

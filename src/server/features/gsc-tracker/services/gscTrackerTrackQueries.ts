@@ -26,7 +26,7 @@ const QUERIES_PER_LOOKUP = DB_BATCH_SIZE - 10;
  * most impressions. With `page`, only pages whose URL contains it count.
  */
 async function topPages(input: {
-  projectId: string;
+  siteId: string;
   queries: string[];
   from: string;
   to: string;
@@ -56,7 +56,7 @@ async function topPages(input: {
       .innerJoin(gscTrackerPages, eq(gscTrackerPages.id, gscTrackerRows.pageId))
       .where(
         and(
-          eq(gscTrackerRows.projectId, input.projectId),
+          eq(gscTrackerRows.siteId, input.siteId),
           gte(gscTrackerRows.date, input.from),
           lte(gscTrackerRows.date, input.to),
           inArray(gscTrackerQueries.query, part),
@@ -85,7 +85,7 @@ async function topPages(input: {
  * checkpoints right away.
  */
 export async function trackQueries(input: {
-  projectId: string;
+  siteId: string;
   queries: string[];
   days: number;
   page?: string;
@@ -95,13 +95,13 @@ export async function trackQueries(input: {
   /** Up to two checkpoint days for all of them. */
   checkpoints?: string[];
 }) {
-  const range = await periods(input.projectId, input.days);
+  const range = await periods(input.siteId, input.days);
   if (!range) throw new AppError("NOT_FOUND", "Tracking is off.");
   const queries = [...new Set(input.queries.map(normalizeQuery))].filter(
     Boolean,
   );
   const pages = await topPages({
-    projectId: input.projectId,
+    siteId: input.siteId,
     queries,
     from: range.currentStart,
     to: range.currentEnd,
@@ -113,7 +113,7 @@ export async function trackQueries(input: {
   });
   const result =
     entries.length > 0
-      ? await GscTrackerKeywordService.add(input.projectId, entries)
+      ? await GscTrackerKeywordService.add(input.siteId, entries)
       : { added: 0, skipped: 0 };
 
   // Tags, start date and checkpoints go on every selected phrase, new or
@@ -127,7 +127,7 @@ export async function trackQueries(input: {
     const wanted = new Set(
       entries.map((entry) => pairKey(entry.query, entry.targetUrl)),
     );
-    keywordIds = (await GscTrackerKeywordRepository.list(input.projectId))
+    keywordIds = (await GscTrackerKeywordRepository.list(input.siteId))
       .filter((keyword) =>
         wanted.has(pairKey(keyword.query, keyword.targetUrl)),
       )
@@ -136,19 +136,19 @@ export async function trackQueries(input: {
   if (keywordIds.length > 0) {
     if (input.tags && input.tags.length > 0)
       await GscTrackerTagService.applyToKeywords({
-        projectId: input.projectId,
+        siteId: input.siteId,
         keywordIds,
         addTags: input.tags,
       });
     if (input.startDate !== undefined)
       await GscTrackerKeywordService.setStartDate({
-        projectId: input.projectId,
+        siteId: input.siteId,
         ids: keywordIds,
         startDate: input.startDate,
       });
     if (input.checkpoints !== undefined)
       await GscTrackerKeywordService.setCheckpoints({
-        projectId: input.projectId,
+        siteId: input.siteId,
         ids: keywordIds,
         checkpoints: input.checkpoints,
       });

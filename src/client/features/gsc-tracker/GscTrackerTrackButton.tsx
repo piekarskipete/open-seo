@@ -9,6 +9,7 @@ import {
   listGscTrackerTargets,
 } from "@/serverFunctions/gscTracker";
 import { comparableUrl, normalizeQuery } from "@/shared/gsc-tracker";
+import { useSiteId } from "@/client/features/gsc-tracker/gscTrackerView";
 
 /**
  * Follows a query in the tracker with this page as its target. The same
@@ -24,24 +25,25 @@ export function TrackPageButton({
   query: string;
   url: string;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const targets = useQuery({
-    queryKey: ["gscTrackerTargets", projectId],
-    queryFn: () => listGscTrackerTargets({ data: { projectId } }),
+    queryKey: ["gscTrackerTargets", siteId],
+    queryFn: () => listGscTrackerTargets({ data: { projectId, siteId } }),
   });
   const add = useMutation({
     meta: { errorToast: false },
     mutationFn: () =>
       addGscTrackerKeywords({
-        data: { projectId, entries: [{ query, targetUrl: url }] },
+        data: { projectId, siteId, entries: [{ query, targetUrl: url }] },
       }),
     onSuccess: () => {
       toast.success(`Tracking “${query}” on ${url}`);
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerTargets", projectId],
+        queryKey: ["gscTrackerTargets", siteId],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywords", projectId],
+        queryKey: ["gscTrackerKeywords", siteId],
       });
     },
     onError: (error) => toast.error(getStandardErrorMessage(error)),

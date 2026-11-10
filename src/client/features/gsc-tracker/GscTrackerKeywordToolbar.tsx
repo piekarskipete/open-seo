@@ -23,6 +23,7 @@ import {
   updateGscTrackerTag,
 } from "@/serverFunctions/gscTrackerTags";
 import type { TagColorKey } from "@/shared/tag-colors";
+import { useSiteId } from "@/client/features/gsc-tracker/gscTrackerView";
 
 /** The tag filter, with renaming, recoloring and deleting tags, as on
  *  Saved Keywords; these tags are the tracker's own. */
@@ -37,13 +38,14 @@ export function KeywordTagFilter({
   value: string[];
   onChange: (tagIds: string[]) => void;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const run = async (tagId: string, action: () => Promise<unknown>) => {
     setBusy((current) => new Set(current).add(tagId));
     try {
       await action();
-      refreshTags(queryClient, projectId);
+      refreshTags(queryClient, siteId);
     } catch (error) {
       toast.error(getStandardErrorMessage(error, "Could not change the tag"));
     } finally {
@@ -69,6 +71,7 @@ export function KeywordTagFilter({
           updateGscTrackerTag({
             data: {
               projectId,
+              siteId,
               tagId: input.tagId,
               name: input.name,
               color: input.color ?? undefined,
@@ -79,7 +82,7 @@ export function KeywordTagFilter({
       onDeleteTag={(tagId) => {
         onChange(value.filter((id) => id !== tagId));
         void run(tagId, () =>
-          deleteGscTrackerTag({ data: { projectId, tagId } }),
+          deleteGscTrackerTag({ data: { projectId, siteId, tagId } }),
         );
       }}
     />
@@ -111,18 +114,19 @@ export function KeywordBulkBar({
   checkpoints: string[];
   onClear: () => void;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const [tagging, setTagging] = useState(false);
   const apply = useMutation({
     mutationFn: (input: { addTags?: string[]; removeTagIds?: string[] }) =>
       applyGscTrackerKeywordTags({
-        data: { projectId, keywordIds: selected, ...input },
+        data: { projectId, siteId, keywordIds: selected, ...input },
       }),
     onSuccess: (result) => {
       toast.success(
         `Tags updated on ${result.changed} phrase${result.changed === 1 ? "" : "s"}`,
       );
-      refreshTags(queryClient, projectId);
+      refreshTags(queryClient, siteId);
       setTagging(false);
     },
   });
