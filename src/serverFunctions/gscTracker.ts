@@ -4,12 +4,14 @@ import { hasOrgPermission } from "@/lib/org-permissions";
 import { requireOrgPermission } from "@/server/auth/org-gate";
 import { GscTrackerService } from "@/server/features/gsc-tracker/services/GscTrackerService";
 import { GscTrackerKeywordService } from "@/server/features/gsc-tracker/services/GscTrackerKeywordService";
+import { getKeywordChart } from "@/server/features/gsc-tracker/services/gscTrackerKeywordChart";
 import { requireProjectContext } from "@/serverFunctions/middleware";
 import {
   GSC_TRACKER_POSITION_FORMATS,
   GSC_TRACKER_RANGE_DAYS,
   GSC_TRACKER_SORT_KEYS,
   GSC_TRACKER_DATE_FORMATS,
+  GSC_TRACKER_CHART_DAYS,
 } from "@/shared/gsc-tracker";
 
 const projectSchema = z.object({ projectId: z.string().min(1) });
@@ -36,12 +38,16 @@ const addKeywordsSchema = projectSchema.extend({
     .max(1000),
 });
 const keywordSchema = projectSchema.extend({ id: z.string().min(1) });
-const startDateSchema = keywordSchema.extend({
+const startDateSchema = projectSchema.extend({
+  ids: z.array(z.string().min(1)).min(1).max(1000),
   // A day, or null to measure from the day the phrase was added.
   startDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable(),
+});
+const keywordChartSchema = keywordSchema.extend({
+  days: z.union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days))),
 });
 const settingsSchema = projectSchema.extend({
   positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
@@ -176,8 +182,19 @@ export const setGscTrackerKeywordStart = createServerFn({ method: "POST" })
     requireOrgPermission(context, { integration: ["manage"] });
     await GscTrackerKeywordService.setStartDate({
       projectId: context.projectId,
-      id: data.id,
+      ids: data.ids,
       startDate: data.startDate,
     });
-    return { startDate: data.startDate };
+    return { startDate: data.startDate, updated: data.ids.length };
   });
+
+export const getGscTrackerKeywordChart = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(keywordChartSchema)
+  .handler(({ data, context }) =>
+    getKeywordChart({
+      projectId: context.projectId,
+      id: data.id,
+      days: data.days,
+    }),
+  );

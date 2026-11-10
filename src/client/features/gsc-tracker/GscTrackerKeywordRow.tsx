@@ -1,5 +1,7 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { ChartLine, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/client/components/ui/badge";
+import { Button } from "@/client/components/ui/button";
 import { Checkbox } from "@/client/components/ui/checkbox";
 import {
   formatMetric,
@@ -9,6 +11,7 @@ import {
   StartCell,
   TrendCell,
 } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
+import { KeywordChartDialog } from "@/client/features/gsc-tracker/GscTrackerKeywordChart";
 import { TagChip } from "@/client/features/gsc-tracker/GscTrackerTagChip";
 import type { Tag } from "@/client/features/gsc-tracker/gscTrackerTags";
 import type { getGscTrackerKeywords } from "@/serverFunctions/gscTracker";
@@ -73,9 +76,22 @@ export function KeywordRow({
   onToggle: () => void;
 }) {
   const monthValues = useMonthValues();
+  const [charting, setCharting] = useState(false);
   const target = keyword.pages.find((page) => page.isTarget);
   return (
-    <div className="flex w-full items-center gap-4 px-3 py-2.5 text-sm hover:bg-muted/40">
+    // A click on the row's numbers opens it too; its controls keep their own
+    // clicks, and the phrase name stays the keyboard way in.
+    <div
+      className="flex w-full cursor-pointer items-center gap-4 px-3 py-2.5 text-sm hover:bg-muted/40"
+      onClick={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest("button, input, a, [role='checkbox']")
+        )
+          return;
+        onToggle();
+      }}
+    >
       {canManage ? (
         <Checkbox
           aria-label={`Select ${keyword.query}`}
@@ -83,57 +99,60 @@ export function KeywordRow({
           onCheckedChange={(value) => onCheck(value === true)}
         />
       ) : null}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex min-w-0 flex-1 items-center gap-4 text-left"
-      >
-        <span className="flex min-w-0 flex-1 items-start gap-1.5">
-          {open ? (
-            <ChevronDown className="mt-0.5 size-3.5 shrink-0" />
-          ) : (
-            <ChevronRight className="mt-0.5 size-3.5 shrink-0" />
-          )}
-          <span className="min-w-0">
-            <span className="font-medium">{keyword.query}</span>
+      <span className="flex min-w-0 flex-1 items-start gap-1.5">
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={open}
+              className="inline-flex items-start gap-1.5 text-left font-medium"
+            >
+              {open ? (
+                <ChevronDown className="mt-0.5 size-3.5 shrink-0" />
+              ) : (
+                <ChevronRight className="mt-0.5 size-3.5 shrink-0" />
+              )}
+              {keyword.query}
+            </button>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground"
+              onClick={() => setCharting(true)}
+              aria-label={`Chart for ${keyword.query}`}
+            >
+              <ChartLine className="size-3.5" />
+              Chart
+            </Button>
             {keyword.cannibalized ? (
               <Badge
                 variant="warning"
-                className="ml-2"
                 title={`${keyword.competingPages} other page${keyword.competingPages === 1 ? "" : "s"} earned more clicks or impressions for this phrase this month`}
               >
                 Competing pages ({keyword.competingPages})
               </Badge>
             ) : null}
             {tags.map((tag) => (
-              <TagChip
-                key={tag.id}
-                name={tag.name}
-                color={tag.color}
-                className="ml-1.5"
-              />
+              <TagChip key={tag.id} name={tag.name} color={tag.color} />
             ))}
-            <span className="block truncate text-xs text-muted-foreground">
-              {keyword.targetUrl}
-            </span>
-            {keyword.newestDate ? null : (
-              <span className="block text-xs text-muted-foreground">
-                Fetching the first days…
-              </span>
-            )}
           </span>
+          <span className="block truncate pl-5 text-xs text-muted-foreground">
+            {keyword.targetUrl}
+          </span>
+          {keyword.newestDate ? null : (
+            <span className="block pl-5 text-xs text-muted-foreground">
+              Fetching the first days…
+            </span>
+          )}
         </span>
-        <MetricColumns values={monthValues(target)} />
-      </button>
+      </span>
+      <MetricColumns values={monthValues(target)} />
       <span className="flex shrink-0 items-center gap-4 tabular-nums">
         <StartCell
-          projectId={projectId}
-          keywordId={keyword.id}
           startDate={keyword.startDate}
           startIsDefault={keyword.startIsDefault}
           start={keyword.start}
-          canManage={canManage}
         />
         <TrendCell
           value={keyword.lastMonth}
@@ -148,6 +167,13 @@ export function KeywordRow({
           }
         />
       </span>
+      {charting ? (
+        <KeywordChartDialog
+          projectId={projectId}
+          keyword={keyword}
+          onClose={() => setCharting(false)}
+        />
+      ) : null}
     </div>
   );
 }

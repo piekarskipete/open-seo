@@ -397,7 +397,7 @@ it("shows a phrase's start, last month and latest positions with their moves", a
       .keywords;
     await keywords.setStartDate({
       projectId: "p1",
-      id,
+      ids: [id],
       startDate: "2026-10-20",
     });
 

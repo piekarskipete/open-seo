@@ -67,3 +67,8 @@ export const GSC_TRACKER_TAG_COLORS = [
 export type GscTrackerTagColor = (typeof GSC_TRACKER_TAG_COLORS)[number];
 
 export const GSC_TRACKER_TAG_NAME_MAX = 40;
+
+/** Periods a followed phrase's chart can show, in days. */
+export const GSC_TRACKER_CHART_DAYS = [7, 28, 90, 180, 365] as const;
+
+export type GscTrackerChartDays = (typeof GSC_TRACKER_CHART_DAYS)[number];

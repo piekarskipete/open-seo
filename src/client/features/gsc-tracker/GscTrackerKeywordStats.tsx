@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CalendarDays } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "cn";
 import { Button } from "@/client/components/ui/button";
 import { Input } from "@/client/components/ui/input";
@@ -29,84 +31,107 @@ function fullDay(day: string, dateFormat: "dd.mm" | "mon-d"): string {
 
 /**
  * The start of a phrase's progress: its date (the day it was added unless
- * set by hand) and the position measured then. Members who manage
- * integrations can pick another date.
+ * set by hand) and the position measured then.
  */
 export function StartCell({
-  projectId,
-  keywordId,
   startDate,
   startIsDefault,
   start,
-  canManage,
 }: {
-  projectId: string;
-  keywordId: string;
   startDate: string;
   startIsDefault: boolean;
   start: { date: string; position: number } | null;
-  canManage: boolean;
 }) {
   const positionFormat = usePositionFormat();
   const dateFormat = useDateFormat();
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(startDate);
-  const save = useMutation({
-    meta: { errorToast: false },
-    mutationFn: (next: string | null) =>
-      setGscTrackerKeywordStart({
-        data: { projectId, id: keywordId, startDate: next },
-      }),
-    onSuccess: () => {
-      setOpen(false);
-      void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywords", projectId],
-      });
-    },
-  });
-  const label = (
-    <>
+  const title = [
+    startIsDefault ? "The day the phrase was added" : "Start date set by hand",
+    start && start.date !== startDate
+      ? `first measured on ${fullDay(start.date, dateFormat)}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return (
+    <span className="w-24 shrink-0 text-right" title={title}>
       <span className="block text-[11px] text-muted-foreground">
         {fullDay(startDate, dateFormat)}
       </span>
       <span className="block">
         {start ? formatPosition(start.position, positionFormat) : "–"}
       </span>
-    </>
+    </span>
   );
-  if (!canManage)
-    return <span className="w-24 shrink-0 text-right">{label}</span>;
+}
+
+/**
+ * "Set start date" for one phrase or every selected one: progress is
+ * measured from that day's position, or from the day each phrase was added.
+ */
+export function StartDateButton({
+  projectId,
+  ids,
+  initialDate,
+  canReset,
+  className,
+  outline = false,
+}: {
+  projectId: string;
+  ids: string[];
+  /** The date the picker opens on. */
+  initialDate: string;
+  /** Offer "Use the day added" (a phrase has a date set by hand). */
+  canReset: boolean;
+  className?: string;
+  /** An outlined, toolbar-sized trigger instead of a quiet link-like one. */
+  outline?: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(initialDate);
+  const many = ids.length > 1;
+  const save = useMutation({
+    meta: { errorToast: false },
+    mutationFn: (next: string | null) =>
+      setGscTrackerKeywordStart({
+        data: { projectId, ids, startDate: next },
+      }),
+    onSuccess: (result) => {
+      setOpen(false);
+      if (many) toast.success(`Start date set for ${result.updated} phrases`);
+      void queryClient.invalidateQueries({
+        queryKey: ["gscTrackerKeywords", projectId],
+      });
+    },
+  });
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) setValue(startDate);
+        if (next) setValue(initialDate);
       }}
     >
       <PopoverTrigger
         render={
-          <button
-            type="button"
-            className="w-24 shrink-0 rounded text-right hover:bg-muted"
-            title={
-              start && start.date !== startDate
-                ? `First measured on ${fullDay(start.date, dateFormat)}`
-                : "Change the start date"
-            }
+          <Button
+            variant={outline ? "outline" : "ghost"}
+            size={outline ? "sm" : "xs"}
+            className={className}
           />
         }
       >
-        {label}
+        <CalendarDays className="size-3.5" />
+        Set start date
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
+      <PopoverContent align="start" className="w-72">
         <PopoverHeader>
-          <PopoverTitle>Start date</PopoverTitle>
+          <PopoverTitle>
+            {many ? `Start date for ${ids.length} phrases` : "Start date"}
+          </PopoverTitle>
           <PopoverDescription>
             Progress is measured from this day&apos;s position, or the first
             measured day after it.
-            {startIsDefault ? " It is the day the phrase was added." : ""}
           </PopoverDescription>
         </PopoverHeader>
         <Input
@@ -121,7 +146,7 @@ export function StartCell({
           </p>
         ) : null}
         <div className="flex justify-end gap-1">
-          {startIsDefault ? null : (
+          {canReset ? (
             <Button
               variant="ghost"
               size="sm"
@@ -130,7 +155,7 @@ export function StartCell({
             >
               Use the day added
             </Button>
-          )}
+          ) : null}
           <Button
             size="sm"
             disabled={!/^\d{4}-\d{2}-\d{2}$/.test(value)}

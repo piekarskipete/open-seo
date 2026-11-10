@@ -164,20 +164,23 @@ async function listDays(input: {
 
 /** Sets the day a phrase's progress is measured from; null resets it to the
  *  day it was added. */
+/** Sets the start date of several phrases of the project at once. */
 async function setStartDate(input: {
   projectId: string;
-  id: string;
+  ids: string[];
   startDate: string | null;
 }): Promise<void> {
-  await db
-    .update(gscTrackerKeywords)
-    .set({ startDate: input.startDate })
-    .where(
-      and(
-        eq(gscTrackerKeywords.id, input.id),
-        eq(gscTrackerKeywords.projectId, input.projectId),
-      ),
-    );
+  for (const part of chunk(input.ids, DB_BATCH_SIZE - 2)) {
+    await db
+      .update(gscTrackerKeywords)
+      .set({ startDate: input.startDate })
+      .where(
+        and(
+          inArray(gscTrackerKeywords.id, part),
+          eq(gscTrackerKeywords.projectId, input.projectId),
+        ),
+      );
+  }
 }
 
 /** One phrase's stored page-days between two dates, oldest first. */

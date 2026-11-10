@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Line, LineChart } from "recharts";
+import { Line, LineChart, ReferenceLine } from "recharts";
 import { cn } from "cn";
 import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
@@ -126,11 +126,16 @@ type SeriesPoint = { date: string } & Record<Metric, number | null>;
 export function TrendChart({
   series,
   initialMetric = "clicks",
+  start,
 }: {
   series: SeriesPoint[];
   initialMetric?: Metric;
+  /** A followed phrase's start: its date, and its position then. */
+  start?: { date: string; position: number | null };
 }) {
   const formatMetric = useFormatMetric();
+  const startInRange =
+    start !== undefined && series.some((point) => point.date === start.date);
   const [metric, setMetric] = useState<Metric>(initialMetric);
   const config: ChartConfig = {
     [metric]: { label: METRIC_LABELS[metric], color: "var(--chart-1)" },
@@ -176,8 +181,35 @@ export function TrendChart({
               />
             }
           />
+          {startInRange ? (
+            <ReferenceLine
+              x={start.date}
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 4"
+              label={{
+                value: "Start",
+                position: "insideTopLeft",
+                fontSize: 11,
+                fill: "var(--muted-foreground)",
+              }}
+            />
+          ) : null}
+          {metric === "position" && start?.position != null ? (
+            <ReferenceLine
+              y={start.position}
+              stroke="var(--chart-2)"
+              strokeDasharray="4 4"
+              label={{
+                value: `Start position ${formatMetric("position", start.position)}`,
+                position: "insideBottomRight",
+                fontSize: 11,
+                fill: "var(--chart-2)",
+              }}
+            />
+          ) : null}
           <Line
             type="monotone"
+            connectNulls
             dataKey={metric}
             stroke={`var(--color-${metric})`}
             strokeWidth={2}
