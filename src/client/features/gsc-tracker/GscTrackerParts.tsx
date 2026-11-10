@@ -51,6 +51,7 @@ import {
   METRICS,
   type Metric,
   type Metrics,
+  useSiteId,
 } from "./gscTrackerView";
 
 /** Change from the previous window. For position, lower is better. */
@@ -242,14 +243,15 @@ export function QueryDetailDialog({
   days: GscTrackerRangeDays;
   onClose: () => void;
 }) {
+  const siteId = useSiteId();
   const formatMetric = useFormatMetric();
   // Opens on the page's period; the dialog then picks its own.
   const [range, setRange] = useState<ChartRange>(() => initialRange(days));
   const request = rangeRequest(range);
   const detail = useQuery({
-    queryKey: ["gscTrackerQuery", projectId, query, request],
+    queryKey: ["gscTrackerQuery", siteId, query, request],
     queryFn: () =>
-      getGscTrackerQuery({ data: { projectId, query, ...request } }),
+      getGscTrackerQuery({ data: { projectId, siteId, query, ...request } }),
     enabled: request !== null,
     placeholderData: keepPreviousData,
   });

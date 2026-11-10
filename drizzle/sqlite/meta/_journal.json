@@ -540,6 +540,20 @@
       "when": 1794336540719,
       "tag": "0076_gsc_tracker_checkpoints",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1794352029211,
+      "tag": "0077_gsc_tracker_sites",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1794352035740,
+      "tag": "0078_gsc_tracker_drop_projects",
+      "breakpoints": true
     }
   ]
 }

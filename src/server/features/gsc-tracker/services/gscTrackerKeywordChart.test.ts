@@ -54,6 +54,8 @@ beforeAll(async () => {
     "drizzle/sqlite/0074_gsc_tracker_keyword_start.sql",
     "drizzle/sqlite/0075_gsc_tracker_tags.sql",
     "drizzle/sqlite/0076_gsc_tracker_checkpoints.sql",
+    "drizzle/sqlite/0077_gsc_tracker_sites.sql",
+    "drizzle/sqlite/0078_gsc_tracker_drop_projects.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
@@ -69,12 +71,15 @@ afterAll(() => {
 beforeEach(async () => {
   await client.executeMultiple(`
     DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords;
-    DELETE FROM gsc_tracker_pages;
-    INSERT INTO gsc_tracker_pages (id, project_id, url) VALUES
-      (1, 'p1', 'https://x/a/'), (2, 'p1', 'https://x/b');
+    DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_sites;
+    INSERT INTO gsc_tracker_sites (id, project_id, organization_id, site_url, enabled_by_user_id)
+      VALUES ('p1', 'p1', 'org1', 'sc-domain:example.com', 'u1'),
+             ('p2', 'p2', 'org1', 'sc-domain:other.com', 'u1');
+    INSERT INTO gsc_tracker_pages (id, project_id, site_id, url) VALUES
+      (1, 'p1', 'p1', 'https://x/a/'), (2, 'p1', 'p1', 'https://x/b');
     INSERT INTO gsc_tracker_keywords
-      (id, project_id, query, target_url, oldest_date, newest_date)
-      VALUES ('k1', 'p1', 'shoes', 'https://x/a', '2026-10-25', '2026-11-08');
+      (id, project_id, site_id, query, target_url, oldest_date, newest_date)
+      VALUES ('k1', 'p1', 'p1', 'shoes', 'https://x/a', '2026-10-25', '2026-11-08');
     INSERT INTO gsc_tracker_keyword_days
       (keyword_id, date, page_id, clicks, impressions, position) VALUES
       -- Previous 7 days (10-26..11-01): one day.
@@ -88,7 +93,7 @@ beforeEach(async () => {
 });
 
 it("charts a phrase's target URL day by day with the period's totals", async () => {
-  const chart = await getKeywordChart({ projectId: "p1", id: "k1", days: 7 });
+  const chart = await getKeywordChart({ siteId: "p1", id: "k1", days: 7 });
   expect(chart.start).toBe("2026-11-02");
   expect(chart.end).toBe("2026-11-08");
   // Every day of the period, empty days without a position.
@@ -102,7 +107,7 @@ it("charts a phrase's target URL day by day with the period's totals", async () 
   expect(chart.previous).toMatchObject({ clicks: 1, position: 9 });
 
   await expect(
-    getKeywordChart({ projectId: "p2", id: "k1", days: 7 }),
+    getKeywordChart({ siteId: "p2", id: "k1", days: 7 }),
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
 
@@ -110,7 +115,7 @@ it("measures progress since the start and between checkpoints", async () => {
   await client.execute(
     "UPDATE gsc_tracker_keywords SET start_date = '2026-10-28', checkpoint1_date = '2026-11-03'",
   );
-  const one = await getKeywordChart({ projectId: "p1", id: "k1", days: 7 });
+  const one = await getKeywordChart({ siteId: "p1", id: "k1", days: 7 });
   // Start: the first measured day from then on; checkpoint: the last up to it.
   expect(one.markers.start.point).toEqual({ date: "2026-10-30", position: 9 });
   expect(one.markers.checkpoints).toEqual([
@@ -134,7 +139,7 @@ it("measures progress since the start and between checkpoints", async () => {
   await client.execute(
     "UPDATE gsc_tracker_keywords SET checkpoint2_date = '2026-11-05'",
   );
-  const two = await getKeywordChart({ projectId: "p1", id: "k1", days: 7 });
+  const two = await getKeywordChart({ siteId: "p1", id: "k1", days: 7 });
   // Two checkpoints: checkpoint 1 to checkpoint 2.
   expect(two.checkpointRange).toMatchObject({
     fromLabel: "Checkpoint 1",
@@ -147,7 +152,7 @@ it("measures progress since the start and between checkpoints", async () => {
 
 it("charts a custom range against the same length before it", async () => {
   const chart = await getKeywordChart({
-    projectId: "p1",
+    siteId: "p1",
     id: "k1",
     from: "2026-11-05",
     to: "2026-11-03",
@@ -164,7 +169,7 @@ it("charts a custom range against the same length before it", async () => {
 
   await expect(
     getKeywordChart({
-      projectId: "p1",
+      siteId: "p1",
       id: "k1",
       from: "2024-01-01",
       to: "2026-11-05",

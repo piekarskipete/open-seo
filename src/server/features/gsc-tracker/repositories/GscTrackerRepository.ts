@@ -5,14 +5,18 @@ import {
   gscTrackerKeywordDays,
   gscTrackerKeywords,
   gscTrackerPages,
-  gscTrackerProjects,
   gscTrackerQueries,
   gscTrackerRows,
+  gscTrackerSites,
   gscTrackerTotals,
 } from "@/db/schema";
 import { GscTrackerTagRepository } from "./GscTrackerTagRepository";
 
-export type GscTrackerProject = typeof gscTrackerProjects.$inferSelect;
+export type GscTrackerSite = typeof gscTrackerSites.$inferSelect;
+
+/** What tracker rows are keyed by: the site, and its project for the
+ *  project-wide foreign key. */
+export type SiteRef = Pick<GscTrackerSite, "id" | "projectId">;
 
 type GscTrackerDayRow = {
   query: string;
@@ -30,9 +34,9 @@ type GscTrackerDayTotals = {
 };
 
 // D1 binds at most ~100 values per statement, so multi-row inserts are cut to
-// fit: a daily row binds 7 values, a dictionary entry 2.
-const ROWS_PER_INSERT = Math.floor(DB_BATCH_SIZE / 7);
-const KEYS_PER_INSERT = Math.floor(DB_BATCH_SIZE / 2);
+// fit: a daily row binds 8 values, a dictionary entry 3.
+const ROWS_PER_INSERT = Math.floor(DB_BATCH_SIZE / 8);
+const KEYS_PER_INSERT = Math.floor(DB_BATCH_SIZE / 3);
 const KEYS_PER_LOOKUP = DB_BATCH_SIZE - 10;
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -42,38 +46,83 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-async function get(projectId: string): Promise<GscTrackerProject | null> {
+async function get(siteId: string): Promise<GscTrackerSite | null> {
   const [row] = await db
     .select()
-    .from(gscTrackerProjects)
-    .where(eq(gscTrackerProjects.projectId, projectId))
+    .from(gscTrackerSites)
+    .where(eq(gscTrackerSites.id, siteId))
     .limit(1);
   return row ?? null;
 }
 
-async function listAll(): Promise<GscTrackerProject[]> {
-  return db.select().from(gscTrackerProjects);
+/** A site of the project, or null when it belongs elsewhere. */
+async function getForProject(
+  projectId: string,
+  siteId: string,
+): Promise<GscTrackerSite | null> {
+  const [row] = await db
+    .select()
+    .from(gscTrackerSites)
+    .where(
+      and(
+        eq(gscTrackerSites.id, siteId),
+        eq(gscTrackerSites.projectId, projectId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+async function listForProject(projectId: string): Promise<GscTrackerSite[]> {
+  return db
+    .select()
+    .from(gscTrackerSites)
+    .where(eq(gscTrackerSites.projectId, projectId))
+    .orderBy(gscTrackerSites.createdAt, gscTrackerSites.siteUrl);
+}
+
+async function listAll(): Promise<GscTrackerSite[]> {
+  return db.select().from(gscTrackerSites);
 }
 
 async function create(input: {
+  id?: string;
   projectId: string;
   organizationId: string;
   siteUrl: string;
   enabledByUserId: string;
-}): Promise<GscTrackerProject> {
-  const [row] = await db
-    .insert(gscTrackerProjects)
-    .values(input)
-    .onConflictDoNothing()
-    .returning();
-  return row ?? (await get(input.projectId))!;
+  gscAccountId?: string | null;
+  serviceAccountId?: string | null;
+  connectedByUserId?: string | null;
+  connectedAccountEmail?: string | null;
+}): Promise<GscTrackerSite> {
+  const id = input.id ?? crypto.randomUUID();
+  await db
+    .insert(gscTrackerSites)
+    .values({ ...input, id })
+    .onConflictDoNothing();
+  const created = await get(id);
+  if (created) return created;
+  // The project already tracks this property.
+  const [existing] = await db
+    .select()
+    .from(gscTrackerSites)
+    .where(
+      and(
+        eq(gscTrackerSites.projectId, input.projectId),
+        eq(gscTrackerSites.siteUrl, input.siteUrl),
+      ),
+    )
+    .limit(1);
+  if (!existing) throw new Error("GSC Tracker site was not stored.");
+  return existing;
 }
 
 async function update(
-  projectId: string,
+  siteId: string,
   values: Partial<
     Pick<
-      GscTrackerProject,
+      GscTrackerSite,
       | "siteUrl"
       | "oldestDate"
       | "newestDate"
@@ -86,53 +135,55 @@ async function update(
   >,
 ): Promise<void> {
   await db
-    .update(gscTrackerProjects)
+    .update(gscTrackerSites)
     .set({ ...values, updatedAt: sql`(current_timestamp)` })
-    .where(eq(gscTrackerProjects.projectId, projectId));
+    .where(eq(gscTrackerSites.id, siteId));
 }
 
-/** Drops the stored history but keeps tracking on, e.g. after the project
- *  switched to another Search Console property. */
-async function clearHistory(projectId: string): Promise<void> {
-  const projectKeywords = db
+/** Drops the site's stored history but keeps tracking on, e.g. after its
+ *  property changed. */
+async function clearHistory(siteId: string): Promise<void> {
+  const siteKeywords = db
     .select({ id: gscTrackerKeywords.id })
     .from(gscTrackerKeywords)
-    .where(eq(gscTrackerKeywords.projectId, projectId));
+    .where(eq(gscTrackerKeywords.siteId, siteId));
   await runBatch((tx) => [
     // Followed phrases stay; their fetched days start over.
     tx
       .delete(gscTrackerKeywordDays)
-      .where(inArray(gscTrackerKeywordDays.keywordId, projectKeywords)),
+      .where(inArray(gscTrackerKeywordDays.keywordId, siteKeywords)),
     tx
       .update(gscTrackerKeywords)
       .set({ oldestDate: null, newestDate: null, lastSyncedAt: null })
-      .where(eq(gscTrackerKeywords.projectId, projectId)),
-    tx.delete(gscTrackerRows).where(eq(gscTrackerRows.projectId, projectId)),
-    tx
-      .delete(gscTrackerTotals)
-      .where(eq(gscTrackerTotals.projectId, projectId)),
-    tx
-      .delete(gscTrackerQueries)
-      .where(eq(gscTrackerQueries.projectId, projectId)),
-    tx.delete(gscTrackerPages).where(eq(gscTrackerPages.projectId, projectId)),
+      .where(eq(gscTrackerKeywords.siteId, siteId)),
+    tx.delete(gscTrackerRows).where(eq(gscTrackerRows.siteId, siteId)),
+    tx.delete(gscTrackerTotals).where(eq(gscTrackerTotals.siteId, siteId)),
+    tx.delete(gscTrackerQueries).where(eq(gscTrackerQueries.siteId, siteId)),
+    tx.delete(gscTrackerPages).where(eq(gscTrackerPages.siteId, siteId)),
   ]);
 }
 
-/** Stops tracking and deletes everything stored for the project. */
-async function remove(projectId: string): Promise<void> {
-  await clearHistory(projectId);
-  await GscTrackerTagRepository.clearProject(projectId);
+/** Stops tracking the site and deletes everything stored for it. */
+async function remove(siteId: string): Promise<void> {
+  await clearHistory(siteId);
+  await GscTrackerTagRepository.clearSite(siteId);
   await db
     .delete(gscTrackerKeywords)
-    .where(eq(gscTrackerKeywords.projectId, projectId));
-  await db
-    .delete(gscTrackerProjects)
-    .where(eq(gscTrackerProjects.projectId, projectId));
+    .where(eq(gscTrackerKeywords.siteId, siteId));
+  await db.delete(gscTrackerSites).where(eq(gscTrackerSites.id, siteId));
 }
 
-/** Ids for the given keys, adding the ones the project hasn't seen yet. */
+/** Removes the project's sites that use its Search Console connection,
+ *  when that connection goes away. */
+async function removeProjectConnectionSites(projectId: string): Promise<void> {
+  const sites = await listForProject(projectId);
+  for (const site of sites)
+    if (site.connectedByUserId === null) await remove(site.id);
+}
+
+/** Ids for the given keys, adding the ones the site hasn't seen yet. */
 async function resolveKeys(
-  projectId: string,
+  site: SiteRef,
   kind: "query" | "page",
   keys: string[],
 ): Promise<Map<string, number>> {
@@ -140,14 +191,13 @@ async function resolveKeys(
   const table = kind === "query" ? gscTrackerQueries : gscTrackerPages;
   const column =
     kind === "query" ? gscTrackerQueries.query : gscTrackerPages.url;
+  const scope = { projectId: site.projectId, siteId: site.id };
   for (const part of chunk(unique, KEYS_PER_INSERT)) {
     await db
       .insert(table)
       .values(
         part.map((key) =>
-          kind === "query"
-            ? { projectId, query: key }
-            : { projectId, url: key },
+          kind === "query" ? { ...scope, query: key } : { ...scope, url: key },
         ),
       )
       .onConflictDoNothing();
@@ -157,7 +207,7 @@ async function resolveKeys(
     const rows = await db
       .select({ id: table.id, key: column })
       .from(table)
-      .where(and(eq(table.projectId, projectId), inArray(column, part)));
+      .where(and(eq(table.siteId, site.id), inArray(column, part)));
     for (const row of rows) ids.set(row.key, row.id);
   }
   return ids;
@@ -165,18 +215,18 @@ async function resolveKeys(
 
 /** Replaces one day's query/page rows. Re-syncing a day is idempotent. */
 async function replaceDay(input: {
-  projectId: string;
+  site: SiteRef;
   date: string;
   rows: GscTrackerDayRow[];
 }): Promise<void> {
-  const { projectId, date, rows } = input;
+  const { site, date, rows } = input;
   const queryIds = await resolveKeys(
-    projectId,
+    site,
     "query",
     rows.map((row) => row.query),
   );
   const pageIds = await resolveKeys(
-    projectId,
+    site,
     "page",
     rows.map((row) => row.page),
   );
@@ -186,7 +236,8 @@ async function replaceDay(input: {
     if (queryId === undefined || pageId === undefined) return [];
     return [
       {
-        projectId,
+        projectId: site.projectId,
+        siteId: site.id,
         date,
         queryId,
         pageId,
@@ -200,10 +251,7 @@ async function replaceDay(input: {
     tx
       .delete(gscTrackerRows)
       .where(
-        and(
-          eq(gscTrackerRows.projectId, projectId),
-          eq(gscTrackerRows.date, date),
-        ),
+        and(eq(gscTrackerRows.siteId, site.id), eq(gscTrackerRows.date, date)),
       ),
     ...chunk(values, ROWS_PER_INSERT).map((part) =>
       tx.insert(gscTrackerRows).values(part),
@@ -213,23 +261,27 @@ async function replaceDay(input: {
 
 /** Replaces the whole-day totals for the given days. */
 async function replaceTotals(input: {
-  projectId: string;
+  site: SiteRef;
   dates: string[];
   totals: GscTrackerDayTotals[];
 }): Promise<void> {
-  const { projectId, dates, totals } = input;
+  const { site, dates, totals } = input;
   if (dates.length === 0) return;
   await runBatch((tx) => [
     tx
       .delete(gscTrackerTotals)
       .where(
         and(
-          eq(gscTrackerTotals.projectId, projectId),
+          eq(gscTrackerTotals.siteId, site.id),
           inArray(gscTrackerTotals.date, dates),
         ),
       ),
     ...chunk(
-      totals.map((day) => ({ projectId, ...day })),
+      totals.map((day) => ({
+        projectId: site.projectId,
+        siteId: site.id,
+        ...day,
+      })),
       ROWS_PER_INSERT,
     ).map((part) => tx.insert(gscTrackerTotals).values(part)),
   ]);
@@ -237,11 +289,14 @@ async function replaceTotals(input: {
 
 export const GscTrackerRepository = {
   get,
+  getForProject,
+  listForProject,
   listAll,
   create,
   update,
   clearHistory,
   remove,
+  removeProjectConnectionSites,
   resolveKeys,
   replaceDay,
   replaceTotals,

@@ -133,7 +133,7 @@ export const {
   billingCustomerStatus,
   ga4Connections,
   gscConnections,
-  gscTrackerProjects,
+  gscTrackerSites,
   gscTrackerQueries,
   gscTrackerPages,
   gscTrackerRows,

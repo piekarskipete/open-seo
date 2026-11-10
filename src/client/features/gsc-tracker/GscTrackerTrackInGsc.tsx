@@ -6,13 +6,14 @@ import { TableBulkActionButton } from "@/client/components/table/TableBulkAction
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import {
   addGscTrackerKeywords,
-  getGscTrackerStatus,
+  getGscTrackerSites,
 } from "@/serverFunctions/gscTracker";
 
 /**
  * Bulk action for query lists: follows each selected query in GSC Tracker,
- * with the page it ranks with as its target URL. Shown only to members who
- * manage integrations, where the tracker is available.
+ * with the page it ranks with as its target URL, on the tracked site for
+ * the project's connected property. Shown only to members who manage
+ * integrations, where the tracker is available.
  */
 export function TrackInGscButton({
   projectId,
@@ -26,34 +27,40 @@ export function TrackInGscButton({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const status = useQuery({
-    queryKey: ["gscTrackerStatus", projectId],
-    queryFn: () => getGscTrackerStatus({ data: { projectId } }),
+  const sites = useQuery({
+    queryKey: ["gscTrackerSites", projectId],
+    queryFn: () => getGscTrackerSites({ data: { projectId } }),
   });
-  const openTracker = () =>
+  // GSC Insights shows the project's connected property; its queries go to
+  // the tracked site for that property.
+  const site = sites.data?.sites.find(
+    (item) => item.siteUrl === sites.data?.projectSiteUrl,
+  );
+  const openSite = (siteId: string) =>
     void navigate({
-      to: "/p/$projectId/gsc-tracker",
-      params: { projectId },
+      to: "/p/$projectId/gsc-tracker/$siteId",
+      params: { projectId, siteId },
       search: { tab: "keywords", days: 28 },
     });
   const add = useMutation({
     meta: { errorToast: false },
-    mutationFn: () =>
+    mutationFn: (siteId: string) =>
       addGscTrackerKeywords({
         data: {
           projectId,
+          siteId,
           entries: entries.filter((entry) => entry.query.trim().length <= 500),
         },
       }),
-    onSuccess: (result) => {
+    onSuccess: (result, siteId) => {
       toast.success(
         `Following ${result.added} phrase${result.added === 1 ? "" : "s"} in GSC Tracker${
           result.skipped > 0 ? ` (${result.skipped} already followed)` : ""
         }`,
-        { action: { label: "Open", onClick: openTracker } },
+        { action: { label: "Open", onClick: () => openSite(siteId) } },
       );
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywords", projectId],
+        queryKey: ["gscTrackerKeywords", siteId],
       });
       onAdded();
     },
@@ -62,19 +69,29 @@ export function TrackInGscButton({
         getStandardErrorMessage(error, "Couldn't add these to GSC Tracker"),
       ),
   });
-  if (!status.data?.available || !status.data.canManage) return null;
+  if (!sites.data?.available || !sites.data.canManage) return null;
   return (
     <TableBulkActionButton
       icon={<Crosshair className="size-3.5" />}
       disabled={add.isPending || entries.length === 0}
       onClick={() => {
-        if (!status.data?.enabled) {
-          toast.info("Start GSC Tracker first to follow phrases there.", {
-            action: { label: "Open GSC Tracker", onClick: openTracker },
-          });
+        if (!site) {
+          toast.info(
+            `Add ${sites.data?.projectSiteUrl ?? "this property"} to GSC Tracker first to follow phrases there.`,
+            {
+              action: {
+                label: "Open GSC Tracker",
+                onClick: () =>
+                  void navigate({
+                    to: "/p/$projectId/gsc-tracker",
+                    params: { projectId },
+                  }),
+              },
+            },
+          );
           return;
         }
-        add.mutate();
+        add.mutate(site.id);
       }}
     >
       Track in GSC

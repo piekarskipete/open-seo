@@ -1,0 +1,1 @@
+DROP TABLE "gsc_tracker_projects" CASCADE;

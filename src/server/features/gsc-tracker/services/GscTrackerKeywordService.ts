@@ -49,7 +49,7 @@ function monthDays(month: string, now: Date): string[] {
  * impressions over the month; a day is flagged when another page beat the
  * target that day.
  */
-async function getMonth(projectId: string, month: string, now = new Date()) {
+async function getMonth(siteId: string, month: string, now = new Date()) {
   const months = availableMonths(now);
   const selected = months.includes(month) ? month : months[0];
   const days = monthDays(selected, now);
@@ -57,15 +57,15 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
   // From the previous month's start, for "last month" and the move into
   // this month's first measured day.
   const [keywords, rows, tagIds] = await Promise.all([
-    GscTrackerKeywordRepository.list(projectId),
+    GscTrackerKeywordRepository.list(siteId),
     days.length > 0
       ? GscTrackerKeywordRepository.listDays({
-          projectId,
+          siteId,
           from: `${addDays(monthStart, -1).slice(0, 7)}-01`,
           to: days[days.length - 1],
         })
       : Promise.resolve([]),
-    GscTrackerTagService.tagsByKeyword(projectId),
+    GscTrackerTagService.tagsByKeyword(siteId),
   ]);
 
   const entries = await Promise.all(
@@ -164,12 +164,12 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
  *  same phrase can be followed for several URLs, each its own entry; a pair
  *  already followed (same phrase, same page) is skipped. */
 async function add(
-  projectId: string,
+  siteId: string,
   entries: { query: string; targetUrl: string }[],
 ) {
-  const tracker = await GscTrackerRepository.get(projectId);
+  const tracker = await GscTrackerRepository.get(siteId);
   if (!tracker) throw new AppError("NOT_FOUND", "Tracking is off.");
-  const existing = await GscTrackerKeywordRepository.list(projectId);
+  const existing = await GscTrackerKeywordRepository.list(siteId);
   const pairKey = (query: string, url: string) =>
     `${query}\n${comparableUrl(url)}`;
   const known = new Set(
@@ -185,16 +185,16 @@ async function add(
   if (existing.length + fresh.size > MAX_KEYWORDS)
     throw new AppError(
       "VALIDATION_ERROR",
-      `A project can follow up to ${MAX_KEYWORDS} phrases.`,
+      `A site can follow up to ${MAX_KEYWORDS} phrases.`,
     );
-  await GscTrackerKeywordRepository.upsertMany(projectId, [...fresh.values()]);
+  await GscTrackerKeywordRepository.upsertMany(tracker, [...fresh.values()]);
   await syncKeywords(tracker);
   return { added: fresh.size, skipped: entries.length - fresh.size };
 }
 
 /** Every followed phrase with its target, to show which pages are tracked. */
-async function listTargets(projectId: string) {
-  const keywords = await GscTrackerKeywordRepository.list(projectId);
+async function listTargets(siteId: string) {
+  const keywords = await GscTrackerKeywordRepository.list(siteId);
   return keywords.map((keyword) => ({
     query: keyword.query,
     targetUrl: keyword.targetUrl,
@@ -204,7 +204,7 @@ async function listTargets(projectId: string) {
 /** Sets the day a phrase's progress is measured from; null goes back to
  *  the day it was added. */
 async function setStartDate(input: {
-  projectId: string;
+  siteId: string;
   ids: string[];
   startDate: string | null;
 }) {
@@ -216,7 +216,7 @@ async function setStartDate(input: {
 
 /** Replaces the checkpoints (up to two days) of several phrases. */
 async function setCheckpoints(input: {
-  projectId: string;
+  siteId: string;
   ids: string[];
   checkpoints: string[];
 }) {
@@ -228,14 +228,14 @@ async function setCheckpoints(input: {
       "A phrase takes up to two checkpoints.",
     );
   await GscTrackerKeywordRepository.setCheckpoints({
-    projectId: input.projectId,
+    siteId: input.siteId,
     ids: [...new Set(input.ids)],
     checkpoints: [days[0] ?? null, days[1] ?? null],
   });
 }
 
-async function remove(projectId: string, id: string) {
-  await GscTrackerKeywordRepository.remove(projectId, id);
+async function remove(siteId: string, id: string) {
+  await GscTrackerKeywordRepository.remove(siteId, id);
 }
 
 export const GscTrackerKeywordService = {

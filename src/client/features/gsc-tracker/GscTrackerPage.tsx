@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/client/components/EmptyState";
-import { PageHeader } from "@/client/components/PageHeader";
 import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import { Skeleton } from "@/client/components/ui/skeleton";
@@ -9,10 +8,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/client/components/ui/tabs";
 import { History } from "lucide-react";
 import {
   HistoryNotice,
-  StartTracking,
   TrackerStatus,
 } from "@/client/features/gsc-tracker/GscTrackerSetup";
-import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
 import { CannibalizationList } from "@/client/features/gsc-tracker/GscTrackerCannibalization";
 import {
   QueryDetailDialog,
@@ -25,6 +22,8 @@ import {
   DateFormatContext,
   formatDay,
   PositionFormatContext,
+  SiteContext,
+  useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import {
   getGscTrackerCannibalization,
@@ -54,13 +53,16 @@ const TAB_LABELS: Record<GscTrackerTab, string> = {
   cannibalization: "Cannibalization",
 };
 
-export function GscTrackerPage({
+/** One tracked site: its status, then the report tabs. */
+export function GscTrackerSitePage({
   projectId,
+  siteId,
   tab,
   days,
   onChange,
 }: {
   projectId: string;
+  siteId: string;
   tab: GscTrackerTab;
   days: GscTrackerRangeDays;
   onChange: (update: {
@@ -69,83 +71,62 @@ export function GscTrackerPage({
   }) => void;
 }) {
   const status = useQuery({
-    queryKey: ["gscTrackerStatus", projectId],
-    queryFn: () => getGscTrackerStatus({ data: { projectId } }),
+    queryKey: ["gscTrackerStatus", siteId],
+    queryFn: () => getGscTrackerStatus({ data: { projectId, siteId } }),
     // While the history is still loading, follow the cron's progress.
     refetchInterval: (query) =>
-      query.state.data?.enabled && query.state.data.progress < 1
-        ? 30_000
-        : false,
+      query.state.data && query.state.data.progress < 1 ? 30_000 : false,
   });
 
+  if (status.isPending) return <Skeleton className="h-40 w-full" />;
+  if (status.isError)
+    return (
+      <QueryError
+        error={status.error}
+        fallback="Couldn't load this site."
+        onRetry={() => void status.refetch()}
+        isRetrying={status.isFetching}
+      />
+    );
+  if (!status.data.available)
+    return (
+      <EmptyState
+        icon={History}
+        title="GSC Tracker runs on self-hosted OpenSEO"
+        description="It stores your Search Console history in your own database. Use GSC Insights for live Search Console data."
+      />
+    );
   return (
-    <div className="overflow-auto px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-8">
-      <div className="mx-auto max-w-7xl space-y-4">
-        <PageHeader
-          title="GSC Tracker"
-          description="Follow phrases day by day on the URL that should rank, and keep up to 16 months of Search Console history."
-        />
-        {status.isPending ? (
-          <Skeleton className="h-40 w-full" />
-        ) : status.isError ? (
-          <QueryError
-            error={status.error}
-            fallback="Couldn't load the tracker."
-            onRetry={() => void status.refetch()}
-            isRetrying={status.isFetching}
-          />
-        ) : !status.data.available ? (
+    <SiteContext.Provider value={siteId}>
+      <div className="space-y-4">
+        <TrackerStatus projectId={projectId} status={status.data} />
+        {status.data.newestDate ? (
+          <PositionFormatContext.Provider value={status.data.positionFormat}>
+            <DateFormatContext.Provider value={status.data.dateFormat}>
+              <TrackerReport
+                projectId={projectId}
+                canManage={status.data.canManage}
+                explorerSort={status.data.explorerSort}
+                history={{
+                  oldestDate: status.data.oldestDate,
+                  newestDate: status.data.newestDate,
+                  progress: status.data.progress,
+                }}
+                tab={tab}
+                days={days}
+                onChange={onChange}
+              />
+            </DateFormatContext.Provider>
+          </PositionFormatContext.Provider>
+        ) : (
           <EmptyState
             icon={History}
-            title="GSC Tracker runs on self-hosted OpenSEO"
-            description="It stores your Search Console history in your own database. Use GSC Insights for live Search Console data."
+            title="Fetching the first days"
+            description="The most recent days arrive first, then older history in the background."
           />
-        ) : !status.data.connected ? (
-          <GoogleConnectionCard
-            provider="gsc"
-            projectId={projectId}
-            prominent
-          />
-        ) : !status.data.enabled ? (
-          <StartTracking
-            projectId={projectId}
-            canManage={status.data.canManage}
-            siteUrl={status.data.siteUrl}
-          />
-        ) : (
-          <>
-            <TrackerStatus projectId={projectId} status={status.data} />
-            {status.data.newestDate ? (
-              <PositionFormatContext.Provider
-                value={status.data.positionFormat}
-              >
-                <DateFormatContext.Provider value={status.data.dateFormat}>
-                  <TrackerReport
-                    projectId={projectId}
-                    canManage={status.data.canManage}
-                    explorerSort={status.data.explorerSort}
-                    history={{
-                      oldestDate: status.data.oldestDate,
-                      newestDate: status.data.newestDate,
-                      progress: status.data.progress,
-                    }}
-                    tab={tab}
-                    days={days}
-                    onChange={onChange}
-                  />
-                </DateFormatContext.Provider>
-              </PositionFormatContext.Provider>
-            ) : (
-              <EmptyState
-                icon={History}
-                title="Fetching the first days"
-                description="The most recent days arrive first, then older history in the background."
-              />
-            )}
-          </>
         )}
       </div>
-    </div>
+    </SiteContext.Provider>
   );
 }
 
@@ -243,9 +224,10 @@ function OverviewTab({
   projectId: string;
   days: GscTrackerRangeDays;
 }) {
+  const siteId = useSiteId();
   const overview = useQuery({
-    queryKey: ["gscTrackerOverview", projectId, days],
-    queryFn: () => getGscTrackerOverview({ data: { projectId, days } }),
+    queryKey: ["gscTrackerOverview", siteId, days],
+    queryFn: () => getGscTrackerOverview({ data: { projectId, siteId, days } }),
     placeholderData: keepPreviousData,
   });
   if (overview.isPending) return <Skeleton className="h-80 w-full" />;
@@ -286,9 +268,11 @@ function CannibalizationTab({
   days: GscTrackerRangeDays;
   onSelect: (query: string) => void;
 }) {
+  const siteId = useSiteId();
   const result = useQuery({
-    queryKey: ["gscTrackerCannibalization", projectId, days],
-    queryFn: () => getGscTrackerCannibalization({ data: { projectId, days } }),
+    queryKey: ["gscTrackerCannibalization", siteId, days],
+    queryFn: () =>
+      getGscTrackerCannibalization({ data: { projectId, siteId, days } }),
     placeholderData: keepPreviousData,
   });
   if (result.isPending) return <Skeleton className="h-80 w-full" />;

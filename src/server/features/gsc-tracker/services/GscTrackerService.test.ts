@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { runBatch } from "@/db/runBatch";
 import type * as ServiceModule from "./GscTrackerService";
+import type * as SiteModule from "../repositories/GscTrackerRepository";
 import type * as KeywordModule from "./GscTrackerKeywordService";
 
 type Row = {
@@ -18,11 +19,21 @@ type Row = {
 const gsc = vi.hoisted(() => ({
   getConnection: vi.fn(),
   getPerformance: vi.fn(),
+  listSitesForUserWithGrantStatus: vi.fn(),
 }));
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@/server/features/gsc/services/GscService", () => ({
   GscService: gsc,
   isExpectedGrantFailure: () => false,
+}));
+vi.mock("./gscTrackerAccess", () => ({
+  // Each site's request, as Search Console would answer it for its property.
+  querySite: (site: { projectId: string; siteUrl: string }, input: object) =>
+    gsc.getPerformance({
+      ...input,
+      projectId: site.projectId,
+      siteUrl: site.siteUrl,
+    }),
 }));
 vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: async () => false,
@@ -35,11 +46,12 @@ vi.mock("@/server/features/google/googleAccess", () => ({
 let client: Client;
 const directory = mkdtempSync(join(tmpdir(), "gsc-tracker-"));
 let service: typeof ServiceModule.GscTrackerService;
+let sites: typeof SiteModule.GscTrackerRepository;
 let keywords: typeof KeywordModule.GscTrackerKeywordService;
 type Build = Parameters<typeof runBatch>[0];
 
 // What Search Console "returns" per day, by query and page.
-let dayRows: (date: string) => Row[] = () => [];
+let dayRows: (date: string, siteUrl?: string) => Row[] = () => [];
 // What it returns for the followed-phrase request of a day.
 let phraseRows: (date: string) => Row[] = () => [];
 
@@ -72,11 +84,15 @@ beforeAll(async () => {
     "drizzle/sqlite/0074_gsc_tracker_keyword_start.sql",
     "drizzle/sqlite/0075_gsc_tracker_tags.sql",
     "drizzle/sqlite/0076_gsc_tracker_checkpoints.sql",
+    "drizzle/sqlite/0077_gsc_tracker_sites.sql",
+    "drizzle/sqlite/0078_gsc_tracker_drop_projects.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
     );
   ({ GscTrackerService: service } = await import("./GscTrackerService"));
+  ({ GscTrackerRepository: sites } =
+    await import("../repositories/GscTrackerRepository"));
   ({ GscTrackerKeywordService: keywords } =
     await import("./GscTrackerKeywordService"));
 });
@@ -86,9 +102,27 @@ afterAll(() => {
   rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
 });
 
+/** The project's first site, as the migration makes it: id = project id. */
+async function enableSite() {
+  const site = await sites.create({
+    id: "p1",
+    projectId: "p1",
+    organizationId: "org1",
+    siteUrl: "sc-domain:example.com",
+    enabledByUserId: "u1",
+  });
+  await service.syncNow(site);
+}
+
+async function siteP1() {
+  const site = await sites.get("p1");
+  if (!site) throw new Error("site p1 missing");
+  return site;
+}
+
 beforeEach(async () => {
   await client.executeMultiple(
-    "DELETE FROM gsc_tracker_keyword_tags; DELETE FROM gsc_tracker_tags; DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_projects;",
+    "DELETE FROM gsc_tracker_keyword_tags; DELETE FROM gsc_tracker_tags; DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_sites;",
   );
   gsc.getConnection.mockResolvedValue({ siteUrl: "sc-domain:example.com" });
   gsc.getPerformance.mockImplementation(
@@ -97,13 +131,14 @@ beforeEach(async () => {
       endDate: string;
       dimensions: string[];
       regexFilters?: unknown[];
+      siteUrl?: string;
     }) => {
       if (input.regexFilters) return { rows: phraseRows(input.startDate) };
       if (input.dimensions[0] === "date") {
         // Totals: one row per day of the batch.
         const rows: Row[] = [];
         for (let d = input.startDate; d <= input.endDate; ) {
-          const day = dayRows(d);
+          const day = dayRows(d, input.siteUrl);
           rows.push({
             keys: [d],
             clicks: day.reduce((sum, row) => sum + row.clicks, 0) + 1,
@@ -117,7 +152,7 @@ beforeEach(async () => {
         }
         return { rows };
       }
-      return { rows: dayRows(input.startDate) };
+      return { rows: dayRows(input.startDate, input.siteUrl) };
     },
   );
 });
@@ -162,23 +197,18 @@ it("stores synced days and compares the current window with the previous one", a
               position: 4,
             },
           ];
-    await service.enable({
-      projectId: "p1",
-      organizationId: "org1",
-      userId: "u1",
-    });
+    await enableSite();
 
     // The first batch: four recent days plus two older ones.
-    const status = await service.getStatus("p1");
+    const status = await service.getStatus(await siteP1());
     expect(status).toMatchObject({
-      enabled: true,
       oldestDate: "2026-11-03",
       newestDate: "2026-11-08",
       lastError: null,
     });
 
     const list = await service.compareQueries({
-      projectId: "p1",
+      siteId: "p1",
       days: 7,
     });
     const byKey = new Map(list?.rows.map((row) => [row.key, row]));
@@ -198,7 +228,7 @@ it("stores synced days and compares the current window with the previous one", a
 
     // Filtered by URL: only the queries page b earns, with page b's numbers.
     const forPage = await service.compareQueries({
-      projectId: "p1",
+      siteId: "p1",
       days: 7,
       page: "X/B",
     });
@@ -213,7 +243,7 @@ it("stores synced days and compares the current window with the previous one", a
 
     // 3 days: 11-06..11-08 against 11-03..11-05. "socks" is lost.
     const short = await service.compareQueries({
-      projectId: "p1",
+      siteId: "p1",
       days: 3,
     });
     const socks = short?.rows.find((row) => row.key === "socks");
@@ -241,38 +271,6 @@ it("stores synced days and compares the current window with the previous one", a
   }
 });
 
-it("starts the history over when the project switches property", async () => {
-  vi.useFakeTimers({ now: new Date("2026-11-10T12:00:00Z"), toFake: ["Date"] });
-  try {
-    dayRows = () => [
-      {
-        keys: ["shoes", "https://x/a"],
-        clicks: 1,
-        impressions: 10,
-        position: 2,
-      },
-    ];
-    await service.enable({
-      projectId: "p1",
-      organizationId: "org1",
-      userId: "u1",
-    });
-    gsc.getConnection.mockResolvedValue({ siteUrl: "https://other.example/" });
-    dayRows = () => [];
-    await service.syncNow("p1");
-
-    const status = await service.getStatus("p1");
-    expect(status.siteUrl).toBe("https://other.example/");
-    const list = await service.compareQueries({
-      projectId: "p1",
-      days: 28,
-    });
-    expect(list?.rows).toEqual([]);
-  } finally {
-    vi.useRealTimers();
-  }
-});
-
 it("follows a phrase day by day and marks pages that beat its target", async () => {
   vi.useFakeTimers({ now: new Date("2026-11-10T12:00:00Z"), toFake: ["Date"] });
   try {
@@ -293,11 +291,7 @@ it("follows a phrase day by day and marks pages that beat its target", async () 
         position: 8,
       },
     ];
-    await service.enable({
-      projectId: "p1",
-      organizationId: "org1",
-      userId: "u1",
-    });
+    await enableSite();
     // Typed by hand: mixed case, extra space, no trailing slash.
     await keywords.add("p1", [
       { query: "Running  Shoes", targetUrl: "https://x/a" },
@@ -341,11 +335,7 @@ it("follows one phrase for two URLs as two entries, each with the day's pages", 
         position: 6,
       },
     ];
-    await service.enable({
-      projectId: "p1",
-      organizationId: "org1",
-      userId: "u1",
-    });
+    await enableSite();
     const first = await keywords.add("p1", [
       { query: "rebusy", targetUrl: "https://x/a/" },
       { query: "rebusy", targetUrl: "https://x/b/" },
@@ -386,18 +376,14 @@ it("shows a phrase's start, last month and latest positions with their moves", a
         position: date < "2026-11-01" ? 5 : date === "2026-11-08" ? 2 : 3,
       },
     ];
-    await service.enable({
-      projectId: "p1",
-      organizationId: "org1",
-      userId: "u1",
-    });
+    await enableSite();
     await keywords.add("p1", [{ query: "rebusy", targetUrl: "https://x/a/" }]);
     // Each sync fetches eight more days; four reach back into October.
-    for (let i = 0; i < 4; i++) await service.syncNow("p1");
+    for (let i = 0; i < 4; i++) await service.syncNow(await siteP1());
     const [{ id } = { id: "" }] = (await keywords.getMonth("p1", "2026-11"))
       .keywords;
     await keywords.setStartDate({
-      projectId: "p1",
+      siteId: "p1",
       ids: [id],
       startDate: "2026-10-20",
     });

@@ -18,6 +18,7 @@ import {
   formatPosition,
   useDateFormat,
   usePositionFormat,
+  useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import {
@@ -91,6 +92,7 @@ export function StartDateButton({
   /** Sits in the bulk bar at the bottom: a bar-sized trigger, opening up. */
   inBar?: boolean;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(initialDate);
@@ -99,13 +101,13 @@ export function StartDateButton({
     meta: { errorToast: false },
     mutationFn: (next: string | null) =>
       setGscTrackerKeywordStart({
-        data: { projectId, ids, startDate: next },
+        data: { projectId, siteId, ids, startDate: next },
       }),
     onSuccess: (result) => {
       setOpen(false);
       if (many) toast.success(`Start date set for ${result.updated} phrases`);
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywords", projectId],
+        queryKey: ["gscTrackerKeywords", siteId],
       });
     },
   });
@@ -195,6 +197,7 @@ export function CheckpointsButton({
   initial: string[];
   inBar?: boolean;
 }) {
+  const siteId = useSiteId();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [first, setFirst] = useState(initial[0] ?? "");
@@ -204,16 +207,16 @@ export function CheckpointsButton({
     meta: { errorToast: false },
     mutationFn: (checkpoints: string[]) =>
       setGscTrackerKeywordCheckpoints({
-        data: { projectId, ids, checkpoints },
+        data: { projectId, siteId, ids, checkpoints },
       }),
     onSuccess: (result) => {
       setOpen(false);
       if (many) toast.success(`Checkpoints set for ${result.updated} phrases`);
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywords", projectId],
+        queryKey: ["gscTrackerKeywords", siteId],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerKeywordChart", projectId],
+        queryKey: ["gscTrackerKeywordChart", siteId],
       });
     },
   });

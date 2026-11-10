@@ -58,6 +58,8 @@ beforeAll(async () => {
     "drizzle/sqlite/0074_gsc_tracker_keyword_start.sql",
     "drizzle/sqlite/0075_gsc_tracker_tags.sql",
     "drizzle/sqlite/0076_gsc_tracker_checkpoints.sql",
+    "drizzle/sqlite/0077_gsc_tracker_sites.sql",
+    "drizzle/sqlite/0078_gsc_tracker_drop_projects.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
@@ -76,16 +78,17 @@ afterAll(() => {
 
 beforeEach(async () => {
   await client.executeMultiple(
-    "DELETE FROM gsc_tracker_keyword_tags; DELETE FROM gsc_tracker_tags; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_projects;",
+    "DELETE FROM gsc_tracker_keyword_tags; DELETE FROM gsc_tracker_tags; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_sites;",
   );
   await client.executeMultiple(`
-    INSERT INTO gsc_tracker_projects (project_id, organization_id, site_url, enabled_by_user_id)
-      VALUES ('p1', 'org1', 'sc-domain:example.com', 'u1');
-    INSERT INTO gsc_tracker_keywords (id, project_id, query, target_url) VALUES
-      ('k1', 'p1', 'shoes', 'https://x/a'),
-      ('k2', 'p1', 'boots', 'https://x/b'),
-      ('k3', 'p1', 'socks', 'https://x/c'),
-      ('other', 'p2', 'hats', 'https://y/a');
+    INSERT INTO gsc_tracker_sites (id, project_id, organization_id, site_url, enabled_by_user_id)
+      VALUES ('p1', 'p1', 'org1', 'sc-domain:example.com', 'u1'),
+             ('p2', 'p2', 'org1', 'sc-domain:other.com', 'u1');
+    INSERT INTO gsc_tracker_keywords (id, project_id, site_id, query, target_url) VALUES
+      ('k1', 'p1', 'p1', 'shoes', 'https://x/a'),
+      ('k2', 'p1', 'p1', 'boots', 'https://x/b'),
+      ('k3', 'p1', 'p1', 'socks', 'https://x/c'),
+      ('other', 'p2', 'p2', 'hats', 'https://y/a');
   `);
 });
 
@@ -93,12 +96,12 @@ it("adds tags by name to selected phrases, creating new ones once", async () => 
   // Names are trimmed and matched without case; other projects' phrases
   // are ignored.
   await tags.applyToKeywords({
-    projectId: "p1",
+    siteId: "p1",
     keywordIds: ["k1", "k2", "other"],
     addTags: ["  Blog   posts ", "blog posts"],
   });
   await tags.applyToKeywords({
-    projectId: "p1",
+    siteId: "p1",
     keywordIds: ["k1"],
     addTags: ["BLOG POSTS", "Priority"],
   });
@@ -122,7 +125,7 @@ it("adds tags by name to selected phrases, creating new ones once", async () => 
   expect(byQuery.get("socks")).toEqual([]);
 
   await tags.applyToKeywords({
-    projectId: "p1",
+    siteId: "p1",
     keywordIds: ["k1", "k2"],
     removeTagIds: [blog.id],
   });
@@ -131,17 +134,17 @@ it("adds tags by name to selected phrases, creating new ones once", async () => 
 
 it("renames, recolors and deletes a tag, and drops tags with the tracker", async () => {
   await tags.applyToKeywords({
-    projectId: "p1",
+    siteId: "p1",
     keywordIds: ["k1"],
     addTags: ["Blog", "Shop"],
   });
   const [blog] = await tags.list("p1");
   if (!blog) throw new Error("tag missing");
   await expect(
-    tags.update({ projectId: "p1", id: blog.id, name: "shop" }),
+    tags.update({ siteId: "p1", id: blog.id, name: "shop" }),
   ).rejects.toMatchObject({ code: "CONFLICT" });
   await tags.update({
-    projectId: "p1",
+    siteId: "p1",
     id: blog.id,
     name: "Guides",
     color: "violet",

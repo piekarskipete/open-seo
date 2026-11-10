@@ -68,6 +68,8 @@ import { Route as ApiGscOauthCallbackRouteImport } from './routes/api/gsc/oauth/
 import { Route as AppPProjectIdAiVisibilityIndexRouteImport } from './routes/_app/p/$projectId/ai-visibility/index'
 import { Route as AppPProjectIdAiVisibilityResearchRouteImport } from './routes/_app/p/$projectId/ai-visibility/research'
 import { Route as AppPProjectIdAuditIndexRouteImport } from './routes/_app/p/$projectId/audit/index'
+import { Route as AppPProjectIdGscTrackerIndexRouteImport } from './routes/_app/p/$projectId/gsc-tracker/index'
+import { Route as AppPProjectIdGscTrackerSiteIdRouteImport } from './routes/_app/p/$projectId/gsc-tracker/$siteId'
 import { Route as AppPProjectIdLocalSeoIndexRouteImport } from './routes/_app/p/$projectId/local-seo/index'
 import { Route as AppPProjectIdLocalSeoTrackerIdRouteImport } from './routes/_app/p/$projectId/local-seo/$trackerId'
 import { Route as AppPProjectIdRankTrackingIndexRouteImport } from './routes/_app/p/$projectId/rank-tracking/index'
@@ -386,6 +388,18 @@ const AppPProjectIdAuditIndexRoute = AppPProjectIdAuditIndexRouteImport.update({
   path: '/audit/',
   getParentRoute: () => AppPProjectIdRouteRoute,
 } as any)
+const AppPProjectIdGscTrackerIndexRoute =
+  AppPProjectIdGscTrackerIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppPProjectIdGscTrackerRoute,
+  } as any)
+const AppPProjectIdGscTrackerSiteIdRoute =
+  AppPProjectIdGscTrackerSiteIdRouteImport.update({
+    id: '/$siteId',
+    path: '/$siteId',
+    getParentRoute: () => AppPProjectIdGscTrackerRoute,
+  } as any)
 const AppPProjectIdLocalSeoIndexRoute =
   AppPProjectIdLocalSeoIndexRouteImport.update({
     id: '/',
@@ -512,7 +526,7 @@ export interface FileRoutesByFullPath {
   '/p/$projectId/brand-lookup': typeof AppPProjectIdBrandLookupRoute
   '/p/$projectId/context': typeof AppPProjectIdContextRoute
   '/p/$projectId/domain': typeof AppPProjectIdDomainRoute
-  '/p/$projectId/gsc-tracker': typeof AppPProjectIdGscTrackerRoute
+  '/p/$projectId/gsc-tracker': typeof AppPProjectIdGscTrackerRouteWithChildren
   '/p/$projectId/keywords': typeof AppPProjectIdKeywordsRoute
   '/p/$projectId/local-seo': typeof AppPProjectIdLocalSeoRouteWithChildren
   '/p/$projectId/prompt-explorer': typeof AppPProjectIdPromptExplorerRoute
@@ -525,6 +539,7 @@ export interface FileRoutesByFullPath {
   '/api/gsc/oauth/callback': typeof ApiGscOauthCallbackRoute
   '/p/$projectId/': typeof AppPProjectIdIndexRoute
   '/p/$projectId/ai-visibility/research': typeof AppPProjectIdAiVisibilityResearchRoute
+  '/p/$projectId/gsc-tracker/$siteId': typeof AppPProjectIdGscTrackerSiteIdRoute
   '/p/$projectId/local-seo/$trackerId': typeof AppPProjectIdLocalSeoTrackerIdRoute
   '/p/$projectId/rank-tracking/$configId': typeof AppPProjectIdRankTrackingConfigIdRoute
   '/p/$projectId/reports/$reportId': typeof AppPProjectIdReportsReportIdRoute
@@ -534,6 +549,7 @@ export interface FileRoutesByFullPath {
   '/report-map/$grant/$z/$x/$y': typeof ReportMapGrantZXYRoute
   '/p/$projectId/ai-visibility/': typeof AppPProjectIdAiVisibilityIndexRoute
   '/p/$projectId/audit/': typeof AppPProjectIdAuditIndexRoute
+  '/p/$projectId/gsc-tracker/': typeof AppPProjectIdGscTrackerIndexRoute
   '/p/$projectId/local-seo/': typeof AppPProjectIdLocalSeoIndexRoute
   '/p/$projectId/rank-tracking/': typeof AppPProjectIdRankTrackingIndexRoute
   '/p/$projectId/reports/': typeof AppPProjectIdReportsIndexRoute
@@ -581,7 +597,6 @@ export interface FileRoutesByTo {
   '/p/$projectId/brand-lookup': typeof AppPProjectIdBrandLookupRoute
   '/p/$projectId/context': typeof AppPProjectIdContextRoute
   '/p/$projectId/domain': typeof AppPProjectIdDomainRoute
-  '/p/$projectId/gsc-tracker': typeof AppPProjectIdGscTrackerRoute
   '/p/$projectId/keywords': typeof AppPProjectIdKeywordsRoute
   '/p/$projectId/prompt-explorer': typeof AppPProjectIdPromptExplorerRoute
   '/p/$projectId/sam': typeof AppPProjectIdSamRoute
@@ -591,6 +606,7 @@ export interface FileRoutesByTo {
   '/api/gsc/oauth/callback': typeof ApiGscOauthCallbackRoute
   '/p/$projectId': typeof AppPProjectIdIndexRoute
   '/p/$projectId/ai-visibility/research': typeof AppPProjectIdAiVisibilityResearchRoute
+  '/p/$projectId/gsc-tracker/$siteId': typeof AppPProjectIdGscTrackerSiteIdRoute
   '/p/$projectId/local-seo/$trackerId': typeof AppPProjectIdLocalSeoTrackerIdRoute
   '/p/$projectId/rank-tracking/$configId': typeof AppPProjectIdRankTrackingConfigIdRoute
   '/p/$projectId/reports/$reportId': typeof AppPProjectIdReportsReportIdRoute
@@ -600,6 +616,7 @@ export interface FileRoutesByTo {
   '/report-map/$grant/$z/$x/$y': typeof ReportMapGrantZXYRoute
   '/p/$projectId/ai-visibility': typeof AppPProjectIdAiVisibilityIndexRoute
   '/p/$projectId/audit': typeof AppPProjectIdAuditIndexRoute
+  '/p/$projectId/gsc-tracker': typeof AppPProjectIdGscTrackerIndexRoute
   '/p/$projectId/local-seo': typeof AppPProjectIdLocalSeoIndexRoute
   '/p/$projectId/rank-tracking': typeof AppPProjectIdRankTrackingIndexRoute
   '/p/$projectId/reports': typeof AppPProjectIdReportsIndexRoute
@@ -654,7 +671,7 @@ export interface FileRoutesById {
   '/_app/p/$projectId/brand-lookup': typeof AppPProjectIdBrandLookupRoute
   '/_app/p/$projectId/context': typeof AppPProjectIdContextRoute
   '/_app/p/$projectId/domain': typeof AppPProjectIdDomainRoute
-  '/_app/p/$projectId/gsc-tracker': typeof AppPProjectIdGscTrackerRoute
+  '/_app/p/$projectId/gsc-tracker': typeof AppPProjectIdGscTrackerRouteWithChildren
   '/_app/p/$projectId/keywords': typeof AppPProjectIdKeywordsRoute
   '/_app/p/$projectId/local-seo': typeof AppPProjectIdLocalSeoRouteWithChildren
   '/_app/p/$projectId/prompt-explorer': typeof AppPProjectIdPromptExplorerRoute
@@ -667,6 +684,7 @@ export interface FileRoutesById {
   '/api/gsc/oauth/callback': typeof ApiGscOauthCallbackRoute
   '/_app/p/$projectId/': typeof AppPProjectIdIndexRoute
   '/_app/p/$projectId/ai-visibility/research': typeof AppPProjectIdAiVisibilityResearchRoute
+  '/_app/p/$projectId/gsc-tracker/$siteId': typeof AppPProjectIdGscTrackerSiteIdRoute
   '/_app/p/$projectId/local-seo/$trackerId': typeof AppPProjectIdLocalSeoTrackerIdRoute
   '/_app/p/$projectId/rank-tracking/$configId': typeof AppPProjectIdRankTrackingConfigIdRoute
   '/_app/p/$projectId/reports/$reportId': typeof AppPProjectIdReportsReportIdRoute
@@ -676,6 +694,7 @@ export interface FileRoutesById {
   '/report-map/$grant/$z/$x/$y': typeof ReportMapGrantZXYRoute
   '/_app/p/$projectId/ai-visibility/': typeof AppPProjectIdAiVisibilityIndexRoute
   '/_app/p/$projectId/audit/': typeof AppPProjectIdAuditIndexRoute
+  '/_app/p/$projectId/gsc-tracker/': typeof AppPProjectIdGscTrackerIndexRoute
   '/_app/p/$projectId/local-seo/': typeof AppPProjectIdLocalSeoIndexRoute
   '/_app/p/$projectId/rank-tracking/': typeof AppPProjectIdRankTrackingIndexRoute
   '/_app/p/$projectId/reports/': typeof AppPProjectIdReportsIndexRoute
@@ -741,6 +760,7 @@ export interface FileRouteTypes {
     | '/api/gsc/oauth/callback'
     | '/p/$projectId/'
     | '/p/$projectId/ai-visibility/research'
+    | '/p/$projectId/gsc-tracker/$siteId'
     | '/p/$projectId/local-seo/$trackerId'
     | '/p/$projectId/rank-tracking/$configId'
     | '/p/$projectId/reports/$reportId'
@@ -750,6 +770,7 @@ export interface FileRouteTypes {
     | '/report-map/$grant/$z/$x/$y'
     | '/p/$projectId/ai-visibility/'
     | '/p/$projectId/audit/'
+    | '/p/$projectId/gsc-tracker/'
     | '/p/$projectId/local-seo/'
     | '/p/$projectId/rank-tracking/'
     | '/p/$projectId/reports/'
@@ -797,7 +818,6 @@ export interface FileRouteTypes {
     | '/p/$projectId/brand-lookup'
     | '/p/$projectId/context'
     | '/p/$projectId/domain'
-    | '/p/$projectId/gsc-tracker'
     | '/p/$projectId/keywords'
     | '/p/$projectId/prompt-explorer'
     | '/p/$projectId/sam'
@@ -807,6 +827,7 @@ export interface FileRouteTypes {
     | '/api/gsc/oauth/callback'
     | '/p/$projectId'
     | '/p/$projectId/ai-visibility/research'
+    | '/p/$projectId/gsc-tracker/$siteId'
     | '/p/$projectId/local-seo/$trackerId'
     | '/p/$projectId/rank-tracking/$configId'
     | '/p/$projectId/reports/$reportId'
@@ -816,6 +837,7 @@ export interface FileRouteTypes {
     | '/report-map/$grant/$z/$x/$y'
     | '/p/$projectId/ai-visibility'
     | '/p/$projectId/audit'
+    | '/p/$projectId/gsc-tracker'
     | '/p/$projectId/local-seo'
     | '/p/$projectId/rank-tracking'
     | '/p/$projectId/reports'
@@ -882,6 +904,7 @@ export interface FileRouteTypes {
     | '/api/gsc/oauth/callback'
     | '/_app/p/$projectId/'
     | '/_app/p/$projectId/ai-visibility/research'
+    | '/_app/p/$projectId/gsc-tracker/$siteId'
     | '/_app/p/$projectId/local-seo/$trackerId'
     | '/_app/p/$projectId/rank-tracking/$configId'
     | '/_app/p/$projectId/reports/$reportId'
@@ -891,6 +914,7 @@ export interface FileRouteTypes {
     | '/report-map/$grant/$z/$x/$y'
     | '/_app/p/$projectId/ai-visibility/'
     | '/_app/p/$projectId/audit/'
+    | '/_app/p/$projectId/gsc-tracker/'
     | '/_app/p/$projectId/local-seo/'
     | '/_app/p/$projectId/rank-tracking/'
     | '/_app/p/$projectId/reports/'
@@ -1343,6 +1367,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPProjectIdAuditIndexRouteImport
       parentRoute: typeof AppPProjectIdRouteRoute
     }
+    '/_app/p/$projectId/gsc-tracker/': {
+      id: '/_app/p/$projectId/gsc-tracker/'
+      path: '/'
+      fullPath: '/p/$projectId/gsc-tracker/'
+      preLoaderRoute: typeof AppPProjectIdGscTrackerIndexRouteImport
+      parentRoute: typeof AppPProjectIdGscTrackerRoute
+    }
+    '/_app/p/$projectId/gsc-tracker/$siteId': {
+      id: '/_app/p/$projectId/gsc-tracker/$siteId'
+      path: '/$siteId'
+      fullPath: '/p/$projectId/gsc-tracker/$siteId'
+      preLoaderRoute: typeof AppPProjectIdGscTrackerSiteIdRouteImport
+      parentRoute: typeof AppPProjectIdGscTrackerRoute
+    }
     '/_app/p/$projectId/local-seo/': {
       id: '/_app/p/$projectId/local-seo/'
       path: '/'
@@ -1478,6 +1516,22 @@ const AppPProjectIdAiVisibilityRouteWithChildren =
     AppPProjectIdAiVisibilityRouteChildren,
   )
 
+interface AppPProjectIdGscTrackerRouteChildren {
+  AppPProjectIdGscTrackerSiteIdRoute: typeof AppPProjectIdGscTrackerSiteIdRoute
+  AppPProjectIdGscTrackerIndexRoute: typeof AppPProjectIdGscTrackerIndexRoute
+}
+
+const AppPProjectIdGscTrackerRouteChildren: AppPProjectIdGscTrackerRouteChildren =
+  {
+    AppPProjectIdGscTrackerSiteIdRoute: AppPProjectIdGscTrackerSiteIdRoute,
+    AppPProjectIdGscTrackerIndexRoute: AppPProjectIdGscTrackerIndexRoute,
+  }
+
+const AppPProjectIdGscTrackerRouteWithChildren =
+  AppPProjectIdGscTrackerRoute._addFileChildren(
+    AppPProjectIdGscTrackerRouteChildren,
+  )
+
 interface AppPProjectIdLocalSeoRouteChildren {
   AppPProjectIdLocalSeoTrackerIdRoute: typeof AppPProjectIdLocalSeoTrackerIdRoute
   AppPProjectIdLocalSeoIndexRoute: typeof AppPProjectIdLocalSeoIndexRoute
@@ -1534,7 +1588,7 @@ interface AppPProjectIdRouteRouteChildren {
   AppPProjectIdBrandLookupRoute: typeof AppPProjectIdBrandLookupRoute
   AppPProjectIdContextRoute: typeof AppPProjectIdContextRoute
   AppPProjectIdDomainRoute: typeof AppPProjectIdDomainRoute
-  AppPProjectIdGscTrackerRoute: typeof AppPProjectIdGscTrackerRoute
+  AppPProjectIdGscTrackerRoute: typeof AppPProjectIdGscTrackerRouteWithChildren
   AppPProjectIdKeywordsRoute: typeof AppPProjectIdKeywordsRoute
   AppPProjectIdLocalSeoRoute: typeof AppPProjectIdLocalSeoRouteWithChildren
   AppPProjectIdPromptExplorerRoute: typeof AppPProjectIdPromptExplorerRoute
@@ -1557,7 +1611,7 @@ const AppPProjectIdRouteRouteChildren: AppPProjectIdRouteRouteChildren = {
   AppPProjectIdBrandLookupRoute: AppPProjectIdBrandLookupRoute,
   AppPProjectIdContextRoute: AppPProjectIdContextRoute,
   AppPProjectIdDomainRoute: AppPProjectIdDomainRoute,
-  AppPProjectIdGscTrackerRoute: AppPProjectIdGscTrackerRoute,
+  AppPProjectIdGscTrackerRoute: AppPProjectIdGscTrackerRouteWithChildren,
   AppPProjectIdKeywordsRoute: AppPProjectIdKeywordsRoute,
   AppPProjectIdLocalSeoRoute: AppPProjectIdLocalSeoRouteWithChildren,
   AppPProjectIdPromptExplorerRoute: AppPProjectIdPromptExplorerRoute,
