@@ -5,6 +5,7 @@ import { requireOrgPermission } from "@/server/auth/org-gate";
 import { GscTrackerService } from "@/server/features/gsc-tracker/services/GscTrackerService";
 import { GscTrackerKeywordService } from "@/server/features/gsc-tracker/services/GscTrackerKeywordService";
 import { getKeywordChart } from "@/server/features/gsc-tracker/services/gscTrackerKeywordChart";
+import { trackQueries } from "@/server/features/gsc-tracker/services/gscTrackerTrackQueries";
 import { requireProjectContext } from "@/serverFunctions/middleware";
 import {
   GSC_TRACKER_POSITION_FORMATS,
@@ -81,6 +82,13 @@ const keywordChartSchema = keywordSchema
   .refine((data) => data.days !== undefined || (data.from && data.to), {
     message: "Pick a period or a date range.",
   });
+const trackQueriesSchema = rangeSchema.extend({
+  queries: z.array(z.string().trim().min(1).max(500)).min(1).max(1000),
+  page: z.string().max(2048).optional(),
+  tags: z.array(z.string().max(80)).max(50).optional(),
+  startDate: daySchema.nullable().optional(),
+  checkpoints: z.array(daySchema).max(2).optional(),
+});
 const settingsSchema = projectSchema.extend({
   positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
   explorerSort: z.enum(GSC_TRACKER_SORT_KEYS).optional(),
@@ -249,3 +257,20 @@ export const getGscTrackerKeywordChart = createServerFn({ method: "POST" })
       to: data.to,
     }),
   );
+
+/** Follows Query Explorer queries, each with its top page, and tags them. */
+export const trackGscTrackerQueries = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(trackQueriesSchema)
+  .handler(({ data, context }) => {
+    requireOrgPermission(context, { integration: ["manage"] });
+    return trackQueries({
+      projectId: context.projectId,
+      queries: data.queries,
+      days: data.days,
+      page: data.page,
+      tags: data.tags,
+      startDate: data.startDate,
+      checkpoints: data.checkpoints,
+    });
+  });

@@ -220,6 +220,7 @@ function TrackerReport({
           days={days}
           defaultSortKey={explorerSort}
           onSelect={setSelectedQuery}
+          canManage={canManage}
         />
       )}
       {selectedQuery ? (
