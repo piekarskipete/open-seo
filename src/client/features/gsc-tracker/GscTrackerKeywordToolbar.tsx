@@ -10,7 +10,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/client/components/ui/dropdown-menu";
-import { StartDateButton } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
+import {
+  CheckpointsButton,
+  StartDateButton,
+} from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
 import { TagChip } from "@/client/features/gsc-tracker/GscTrackerTagChip";
 import {
   refreshTags,
@@ -87,6 +90,7 @@ export function SelectionBar({
   tagsOnSelection,
   startDate,
   anyCustomStart,
+  checkpoints,
   onClear,
   onManageTags,
 }: {
@@ -96,6 +100,8 @@ export function SelectionBar({
   startDate: string;
   /** Whether a selected phrase has a start date set by hand. */
   anyCustomStart: boolean;
+  /** The checkpoints the picker opens on. */
+  checkpoints: string[];
   tags: Tag[];
   /** Tag ids at least one selected phrase carries. */
   tagsOnSelection: ReadonlySet<string>;
@@ -148,6 +154,12 @@ export function SelectionBar({
         ids={selected}
         initialDate={startDate}
         canReset={anyCustomStart}
+        outline
+      />
+      <CheckpointsButton
+        projectId={projectId}
+        ids={selected}
+        initial={checkpoints}
         outline
       />
       <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>

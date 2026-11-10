@@ -11,6 +11,10 @@ import {
 } from "@/client/components/ui/dialog";
 import { Skeleton } from "@/client/components/ui/skeleton";
 import {
+  MarkerLegend,
+  RangeCard,
+} from "@/client/features/gsc-tracker/GscTrackerKeywordRanges";
+import {
   Delta,
   TrendChart,
 } from "@/client/features/gsc-tracker/GscTrackerParts";
@@ -98,19 +102,38 @@ export function KeywordChartDialog({
             <TrendChart
               series={chart.data.series}
               initialMetric="position"
-              start={{
-                date: keyword.start?.date ?? keyword.startDate,
-                position: keyword.start?.position ?? null,
-              }}
+              markers={[
+                { date: chart.data.markers.start.date, label: "Start" },
+                ...chart.data.markers.checkpoints.map((checkpoint, index) => ({
+                  date: checkpoint.date,
+                  label: `CP${index + 1}`,
+                })),
+              ]}
+              startPosition={chart.data.markers.start.point?.position ?? null}
             />
+            <MarkerLegend markers={chart.data.markers} />
             <p className="text-xs text-muted-foreground">
               {formatDay(chart.data.start)} – {formatDay(chart.data.end)}, the
-              target URL only. Dashed lines mark the start date
-              {keyword.start ? " and the start position" : ""}.
+              target URL only. Dashed lines outside this period aren&apos;t
+              drawn; the dotted line is the start position.
               {chart.data.oldestDate && chart.data.oldestDate > chart.data.start
                 ? ` Days before ${formatDay(chart.data.oldestDate)} aren't fetched yet, so the period is partly empty.`
                 : ""}
             </p>
+            <div className="grid gap-2 md:grid-cols-2">
+              <RangeCard title="Since start" range={chart.data.sinceStart} />
+              {chart.data.checkpointRange ? (
+                <RangeCard
+                  title={`${chart.data.checkpointRange.fromLabel} → ${chart.data.checkpointRange.toLabel}`}
+                  range={chart.data.checkpointRange}
+                />
+              ) : (
+                <p className="self-center text-xs text-muted-foreground">
+                  Add a checkpoint (open the phrase, then Checkpoints) to
+                  measure start → checkpoint, or checkpoint 1 → checkpoint 2.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </DialogContent>

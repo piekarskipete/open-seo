@@ -71,6 +71,7 @@ beforeAll(async () => {
     "drizzle/sqlite/0073_gsc_tracker_date_format.sql",
     "drizzle/sqlite/0074_gsc_tracker_keyword_start.sql",
     "drizzle/sqlite/0075_gsc_tracker_tags.sql",
+    "drizzle/sqlite/0076_gsc_tracker_checkpoints.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),

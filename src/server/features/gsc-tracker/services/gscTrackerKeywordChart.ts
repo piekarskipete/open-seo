@@ -2,9 +2,14 @@ import { AppError } from "@/server/lib/errors";
 import { GscTrackerKeywordRepository } from "../repositories/GscTrackerKeywordRepository";
 import { addDays, daysBetween, gscTrackerLatestDay } from "./gscTrackerDates";
 import { metrics } from "./gscTrackerWindows";
+import {
+  markerPoints,
+  rangeStats,
+  type TargetDay,
+} from "./gscTrackerKeywordRanges";
 import { comparableUrl } from "@/shared/gsc-tracker";
 
-type Day = { clicks: number; impressions: number; weight: number };
+type Day = TargetDay;
 
 function total(days: Day[]) {
   return days.reduce(
@@ -37,9 +42,18 @@ export async function getKeywordChart(input: {
   const start = addDays(end, -(input.days - 1));
   const previousStart = addDays(start, -input.days);
   const target = comparableUrl(keyword.targetUrl);
+  const startDate = keyword.startDate ?? keyword.createdAt.slice(0, 10);
+  const checkpoints = [keyword.checkpoint1Date, keyword.checkpoint2Date].filter(
+    (date): date is string => date !== null,
+  );
+  // Every stored day, so the start and checkpoint stats reach past the
+  // chart's period.
   const rows = await GscTrackerKeywordRepository.listKeywordDays({
     keywordId: keyword.id,
-    from: previousStart,
+    from: [startDate, ...checkpoints].reduce(
+      (earliest, date) => (date < earliest ? date : earliest),
+      previousStart,
+    ),
     to: end,
   });
 
@@ -85,6 +99,20 @@ export async function getKeywordChart(input: {
     series,
     current: metrics(current.clicks, current.impressions, current.weight),
     previous: metrics(previous.clicks, previous.impressions, previous.weight),
+    markers: markerPoints(byDate, startDate, checkpoints),
+    // From the start date to the newest day, and the checkpoint stretch:
+    // start to checkpoint 1, or checkpoint 1 to checkpoint 2.
+    sinceStart: rangeStats(byDate, startDate, end),
+    checkpointRange:
+      checkpoints.length === 0
+        ? null
+        : {
+            fromLabel: checkpoints.length === 2 ? "Checkpoint 1" : "Start",
+            toLabel: checkpoints.length === 2 ? "Checkpoint 2" : "Checkpoint 1",
+            ...(checkpoints.length === 2
+              ? rangeStats(byDate, checkpoints[0] ?? end, checkpoints[1] ?? end)
+              : rangeStats(byDate, startDate, checkpoints[0] ?? end)),
+          },
     perDay: {
       clicks: current.clicks / fetchedDays,
       impressions: current.impressions / fetchedDays,

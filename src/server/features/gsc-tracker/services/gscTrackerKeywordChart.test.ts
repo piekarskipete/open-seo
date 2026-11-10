@@ -53,6 +53,7 @@ beforeAll(async () => {
     "drizzle/sqlite/0073_gsc_tracker_date_format.sql",
     "drizzle/sqlite/0074_gsc_tracker_keyword_start.sql",
     "drizzle/sqlite/0075_gsc_tracker_tags.sql",
+    "drizzle/sqlite/0076_gsc_tracker_checkpoints.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
@@ -103,4 +104,43 @@ it("charts a phrase's target URL day by day with the period's totals", async () 
   await expect(
     getKeywordChart({ projectId: "p2", id: "k1", days: 7 }),
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+
+it("measures progress since the start and between checkpoints", async () => {
+  await client.execute(
+    "UPDATE gsc_tracker_keywords SET start_date = '2026-10-28', checkpoint1_date = '2026-11-03'",
+  );
+  const one = await getKeywordChart({ projectId: "p1", id: "k1", days: 7 });
+  // Start: the first measured day from then on; checkpoint: the last up to it.
+  expect(one.markers.start.point).toEqual({ date: "2026-10-30", position: 9 });
+  expect(one.markers.checkpoints).toEqual([
+    { date: "2026-11-03", point: { date: "2026-11-03", position: 4 } },
+  ]);
+  expect(one.sinceStart).toMatchObject({
+    from: "2026-10-28",
+    to: "2026-11-08",
+    clicks: 7,
+    impressions: 50,
+    change: 7,
+  });
+  // One checkpoint: start to checkpoint 1.
+  expect(one.checkpointRange).toMatchObject({
+    fromLabel: "Start",
+    toLabel: "Checkpoint 1",
+    clicks: 3,
+    change: 5,
+  });
+
+  await client.execute(
+    "UPDATE gsc_tracker_keywords SET checkpoint2_date = '2026-11-05'",
+  );
+  const two = await getKeywordChart({ projectId: "p1", id: "k1", days: 7 });
+  // Two checkpoints: checkpoint 1 to checkpoint 2.
+  expect(two.checkpointRange).toMatchObject({
+    fromLabel: "Checkpoint 1",
+    toLabel: "Checkpoint 2",
+    first: { date: "2026-11-03", position: 4 },
+    last: { date: "2026-11-05", position: 2 },
+    change: 2,
+  });
 });

@@ -46,6 +46,10 @@ const startDateSchema = projectSchema.extend({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable(),
 });
+const checkpointsSchema = projectSchema.extend({
+  ids: z.array(z.string().min(1)).min(1).max(1000),
+  checkpoints: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(2),
+});
 const keywordChartSchema = keywordSchema.extend({
   days: z.union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days))),
 });
@@ -186,6 +190,21 @@ export const setGscTrackerKeywordStart = createServerFn({ method: "POST" })
       startDate: data.startDate,
     });
     return { startDate: data.startDate, updated: data.ids.length };
+  });
+
+export const setGscTrackerKeywordCheckpoints = createServerFn({
+  method: "POST",
+})
+  .middleware(requireProjectContext)
+  .validator(checkpointsSchema)
+  .handler(async ({ data, context }) => {
+    requireOrgPermission(context, { integration: ["manage"] });
+    await GscTrackerKeywordService.setCheckpoints({
+      projectId: context.projectId,
+      ids: data.ids,
+      checkpoints: data.checkpoints,
+    });
+    return { updated: data.ids.length };
   });
 
 export const getGscTrackerKeywordChart = createServerFn({ method: "POST" })

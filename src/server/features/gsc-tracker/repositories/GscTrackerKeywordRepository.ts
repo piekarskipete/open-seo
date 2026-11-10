@@ -183,6 +183,28 @@ async function setStartDate(input: {
   }
 }
 
+/** Sets up to two checkpoint days (earliest first) on several phrases. */
+async function setCheckpoints(input: {
+  projectId: string;
+  ids: string[];
+  checkpoints: [string | null, string | null];
+}): Promise<void> {
+  for (const part of chunk(input.ids, DB_BATCH_SIZE - 3)) {
+    await db
+      .update(gscTrackerKeywords)
+      .set({
+        checkpoint1Date: input.checkpoints[0],
+        checkpoint2Date: input.checkpoints[1],
+      })
+      .where(
+        and(
+          inArray(gscTrackerKeywords.id, part),
+          eq(gscTrackerKeywords.projectId, input.projectId),
+        ),
+      );
+  }
+}
+
 /** One phrase's stored page-days between two dates, oldest first. */
 async function listKeywordDays(input: {
   keywordId: string;
@@ -221,4 +243,5 @@ export const GscTrackerKeywordRepository = {
   listDays,
   setStartDate,
   listKeywordDays,
+  setCheckpoints,
 };

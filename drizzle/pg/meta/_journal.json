@@ -379,6 +379,13 @@
       "when": 1794335124131,
       "tag": "0053_gsc_tracker_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1794336543833,
+      "tag": "0054_gsc_tracker_checkpoints",
+      "breakpoints": true
     }
   ]
 }

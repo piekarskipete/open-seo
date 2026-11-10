@@ -136,6 +136,9 @@ export const gscTrackerKeywords = pgTable(
     targetUrl: text("target_url").notNull(),
     // The day progress is measured from; null means the day it was added.
     startDate: text("start_date"),
+    // Up to two days to measure progress up to, earliest first.
+    checkpoint1Date: text("checkpoint1_date"),
+    checkpoint2Date: text("checkpoint2_date"),
     // The fetched day range, both ends inclusive; null until the first day.
     oldestDate: text("oldest_date"),
     newestDate: text("newest_date"),
