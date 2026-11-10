@@ -4,7 +4,7 @@ import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import { Input } from "@/client/components/ui/input";
 import { Skeleton } from "@/client/components/ui/skeleton";
-import { CompareTable } from "@/client/features/gsc-tracker/GscTrackerParts";
+import { CompareTable } from "@/client/features/gsc-tracker/GscTrackerCompareTable";
 import {
   applyListFilter,
   defaultSort,

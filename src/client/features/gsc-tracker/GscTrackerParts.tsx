@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Line, LineChart } from "recharts";
-import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "cn";
-import { EmptyState } from "@/client/components/EmptyState";
 import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import {
@@ -11,7 +9,6 @@ import {
   ChartXAxis,
   ChartYAxis,
 } from "@/client/components/ChartAxes";
-import { Button } from "@/client/components/ui/button";
 import {
   ChartContainer,
   ChartTooltip,
@@ -46,14 +43,12 @@ import {
   integer,
   METRIC_LABELS,
   METRICS,
-  type CompareRow,
   type Metric,
   type Metrics,
-  type SortState,
 } from "./gscTrackerView";
 
 /** Change from the previous window. For position, lower is better. */
-function Delta({
+export function Delta({
   metric,
   current,
   previous,
@@ -191,123 +186,6 @@ export function TrendChart({
           />
         </LineChart>
       </ChartContainer>
-    </div>
-  );
-}
-
-const PAGE_SIZE = 100;
-
-export function CompareTable({
-  rows,
-  keyLabel,
-  onSelect,
-  sort,
-  onSort,
-}: {
-  rows: CompareRow[];
-  keyLabel: string;
-  onSelect?: (key: string) => void;
-  /** The column the rows are ordered by, marked in its header. */
-  sort?: SortState | null;
-  onSort?: (key: Metric) => void;
-}) {
-  const formatMetric = useFormatMetric();
-  const [shown, setShown] = useState(PAGE_SIZE);
-  if (rows.length === 0)
-    return (
-      <EmptyState
-        kind="filtered"
-        title="Nothing here for this period"
-        description="Try a longer period or another view."
-      />
-    );
-  return (
-    <div className="space-y-2">
-      <TableCard>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{keyLabel}</TableHead>
-              {METRICS.map((metric) => (
-                <TableHead
-                  key={metric}
-                  className="text-right"
-                  aria-sort={
-                    sort?.key === metric
-                      ? sort.dir === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : undefined
-                  }
-                >
-                  {onSort ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 hover:text-foreground"
-                      onClick={() => onSort(metric)}
-                    >
-                      {METRIC_LABELS[metric]}
-                      {sort?.key === metric ? (
-                        sort.dir === "asc" ? (
-                          <ArrowUp className="size-3" />
-                        ) : (
-                          <ArrowDown className="size-3" />
-                        )
-                      ) : null}
-                    </button>
-                  ) : (
-                    METRIC_LABELS[metric]
-                  )}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.slice(0, shown).map((row) => (
-              <TableRow key={row.key}>
-                <TableCell className="max-w-md">
-                  {onSelect ? (
-                    <button
-                      type="button"
-                      className="text-left break-all hover:underline"
-                      onClick={() => onSelect(row.key)}
-                    >
-                      {row.key}
-                    </button>
-                  ) : (
-                    <span className="break-all">{row.key}</span>
-                  )}
-                </TableCell>
-                {METRICS.map((metric) => (
-                  <TableCell key={metric} className="text-right tabular-nums">
-                    <div>{formatMetric(metric, row.current[metric])}</div>
-                    <Delta
-                      metric={metric}
-                      current={row.current[metric]}
-                      previous={row.previous[metric]}
-                    />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableCard>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          {integer.format(Math.min(shown, rows.length))} of{" "}
-          {integer.format(rows.length)}
-        </span>
-        {shown < rows.length ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShown((value) => value + PAGE_SIZE)}
-          >
-            Show more
-          </Button>
-        ) : null}
-      </div>
     </div>
   );
 }

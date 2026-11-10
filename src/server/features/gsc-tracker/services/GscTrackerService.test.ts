@@ -190,6 +190,9 @@ it("stores synced days and compares the current window with the previous one", a
       ((3 * 40 + 8 * 10) * 4 + 9 * 20 * 2) / 240,
     );
     expect(byKey.get("socks")?.current.clicks).toBe(6);
+    // Pages each query reached in the window.
+    expect(byKey.get("shoes")?.urls).toBe(2);
+    expect(byKey.get("boots")?.urls).toBe(1);
 
     // Filtered by URL: only the queries page b earns, with page b's numbers.
     const forPage = await service.compareQueries({
@@ -198,6 +201,8 @@ it("stores synced days and compares the current window with the previous one", a
       page: "X/B",
     });
     expect(forPage?.rows.map((row) => row.key)).toEqual(["shoes"]);
+    // The URL count stays site-wide under a URL filter.
+    expect(forPage?.rows[0]?.urls).toBe(2);
     expect(forPage?.rows[0]?.current).toMatchObject({
       clicks: 1 * 4,
       impressions: 10 * 4,
@@ -212,6 +217,8 @@ it("stores synced days and compares the current window with the previous one", a
     const socks = short?.rows.find((row) => row.key === "socks");
     expect(socks?.current.clicks).toBe(0);
     expect(socks?.previous.clicks).toBe(6);
+    // Lost queries reached no page in the current window.
+    expect(socks?.urls).toBe(0);
     expect(
       short?.rows.find((row) => row.key === "shoes")?.previous.clicks,
     ).toBe(5 + 1 * 2);
@@ -307,6 +314,7 @@ it("follows a phrase day by day and marks pages that beat its target", async () 
     ]);
     expect(phrase?.pages[0]?.days["2026-11-08"]?.position).toBe(3.4);
     expect(phrase?.cannibalized).toBe(true);
+    expect(phrase?.competingPages).toBe(1);
     expect(phrase?.outrankedDays).toEqual(["2026-11-07", "2026-11-08"]);
   } finally {
     vi.useRealTimers();

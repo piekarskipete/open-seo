@@ -145,6 +145,7 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
         oldestDate: keyword.oldestDate,
         newestDate: keyword.newestDate,
         cannibalized: ranked.some((page) => page.stronger),
+        competingPages: ranked.filter((page) => page.stronger).length,
         outrankedDays,
         pages: ranked,
         ...progress,

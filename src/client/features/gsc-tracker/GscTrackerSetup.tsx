@@ -205,6 +205,7 @@ const SORT_KEYS: { value: GscTrackerSortKey; label: string }[] = [
   { value: "impressions", label: "Impr." },
   { value: "ctr", label: "CTR" },
   { value: "position", label: "Position" },
+  { value: "urls", label: "URLs" },
 ];
 
 const DATE_FORMATS: { value: GscTrackerDateFormat; label: string }[] = [
@@ -291,8 +292,8 @@ function TrackerSettings({
             items={SORT_KEYS.map((item) => ({ ...item, icon: null }))}
           />
           <p className="text-xs text-muted-foreground">
-            How the &ldquo;All&rdquo; view opens: most clicks, impressions or
-            CTR first, or best position first. Column headers still re-sort.
+            How the &ldquo;All&rdquo; view opens: most clicks, impressions, CTR
+            or URLs first, or best position first. Column headers still re-sort.
           </p>
         </div>
       </PopoverContent>

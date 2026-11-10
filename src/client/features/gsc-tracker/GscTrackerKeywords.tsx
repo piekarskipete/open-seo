@@ -247,8 +247,12 @@ function KeywordRow({
           <span className="min-w-0">
             <span className="font-medium">{keyword.query}</span>
             {keyword.cannibalized ? (
-              <Badge variant="warning" className="ml-2">
-                Competing pages
+              <Badge
+                variant="warning"
+                className="ml-2"
+                title={`${keyword.competingPages} other page${keyword.competingPages === 1 ? "" : "s"} earned more clicks or impressions for this phrase this month`}
+              >
+                Competing pages ({keyword.competingPages})
               </Badge>
             ) : null}
             <span className="block truncate text-xs text-muted-foreground">
