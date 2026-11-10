@@ -6,12 +6,12 @@
 
 This is a fork of [every-app/open-seo](https://github.com/every-app/open-seo) that adds Google Search Console modules. Each module lives on its own branch so it can be proposed upstream on its own; `combined` brings them together for day-to-day use and testing.
 
-| Branch                        | Based on              | Contains                                                                                                                                     | Purpose                                                                                                                                                         |
-| ----------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main`                        | upstream `main`       | Upstream OpenSEO, unchanged                                                                                                                  | Mirror of the original project. Upstream updates land here first.                                                                                               |
-| `feature/gsc-tracker`         | `main`                | **GSC Tracker**: stored Search Console history (up to 16 months, synced in the background) with trend, query, page and cannibalization views | One module, ready for an upstream pull request. Migrations: SQLite `0069`, Postgres `0047`.                                                                     |
-| `feature/gsc-service-account` | `main`                | **Service account keys**: connect Search Console by uploading a Google service account JSON key instead of signing in with Google            | One module, ready for an upstream pull request. Migrations: SQLite `0069`, Postgres `0047`.                                                                     |
-| `combined`                    | `feature/gsc-tracker` | **Both modules**: everything in `feature/gsc-tracker` plus everything in `feature/gsc-service-account`                                       | The working branch: run, test and deploy this one. With a service account connected, GSC Tracker syncs through the key, with no Google sign-in that can expire. |
+| Branch                        | Based on              | Contains                                                                                                                                                                                                                                                    | Purpose                                                                                                                                                         |
+| ----------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main`                        | upstream `main`       | Upstream OpenSEO, unchanged                                                                                                                                                                                                                                 | Mirror of the original project. Upstream updates land here first.                                                                                               |
+| `feature/gsc-tracker`         | `main`                | **GSC Tracker**: follow phrases with their target URL and see each one's position day by day, with competing pages marked; plus stored Search Console history (up to 16 months, synced in the background) with trend, query, page and cannibalization views | One module, ready for an upstream pull request. Migrations: SQLite `0069`, `0070`; Postgres `0047`, `0048`.                                                     |
+| `feature/gsc-service-account` | `main`                | **Service account keys**: connect Search Console by uploading a Google service account JSON key instead of signing in with Google                                                                                                                           | One module, ready for an upstream pull request. Migrations: SQLite `0069`, Postgres `0047`.                                                                     |
+| `combined`                    | `feature/gsc-tracker` | **Both modules**: everything in `feature/gsc-tracker` plus everything in `feature/gsc-service-account`                                                                                                                                                      | The working branch: run, test and deploy this one. With a service account connected, GSC Tracker syncs through the key, with no Google sign-in that can expire. |
 
 ### How the branches work together
 
@@ -21,7 +21,15 @@ This is a fork of [every-app/open-seo](https://github.com/every-app/open-seo) th
 
 ### Migration numbers
 
-Both module branches were cut from the same `main`, so each numbers its migration `0069` (SQLite) / `0047` (Postgres). In `combined` the tracker keeps those numbers and the service account migration is renumbered to `0070` / `0048`. Only file names differ; the SQL is the same. A database created from `combined` must keep using `combined`'s numbering.
+Both module branches were cut from the same `main`, so their migrations start at the same numbers. In `combined` they run in this order, which only changes file names, never the SQL:
+
+| Migration                    | SQLite | Postgres | On its module branch |
+| ---------------------------- | ------ | -------- | -------------------- |
+| GSC Tracker history          | `0069` | `0047`   | `0069` / `0047`      |
+| Service account keys         | `0070` | `0048`   | `0069` / `0047`      |
+| GSC Tracker followed phrases | `0071` | `0049`   | `0070` / `0048`      |
+
+A database created from `combined` must keep using `combined`'s numbering.
 
 OpenSEO is an SEO tool for _the people_. If tools like Semrush or Ahrefs are too expensive or bloated, OpenSEO is a pay-as-you-go alternative that you actually control.
 
