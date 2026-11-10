@@ -1,0 +1,1 @@
+ALTER TABLE `gsc_tracker_keywords` ADD `start_date` text;
