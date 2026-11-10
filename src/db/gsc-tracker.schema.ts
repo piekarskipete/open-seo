@@ -145,6 +145,8 @@ export const gscTrackerKeywords = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     query: text("query").notNull(),
     targetUrl: text("target_url").notNull(),
+    // The day progress is measured from; null means the day it was added.
+    startDate: text("start_date"),
     // The fetched day range, both ends inclusive; null until the first day.
     oldestDate: text("oldest_date"),
     newestDate: text("newest_date"),

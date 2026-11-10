@@ -36,6 +36,13 @@ const addKeywordsSchema = projectSchema.extend({
     .max(1000),
 });
 const keywordSchema = projectSchema.extend({ id: z.string().min(1) });
+const startDateSchema = keywordSchema.extend({
+  // A day, or null to measure from the day the phrase was added.
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
+});
 const settingsSchema = projectSchema.extend({
   positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
   explorerSort: z.enum(GSC_TRACKER_SORT_KEYS).optional(),
@@ -161,3 +168,16 @@ export const listGscTrackerTargets = createServerFn({ method: "POST" })
   .handler(({ context }) =>
     GscTrackerKeywordService.listTargets(context.projectId),
   );
+
+export const setGscTrackerKeywordStart = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(startDateSchema)
+  .handler(async ({ data, context }) => {
+    requireOrgPermission(context, { integration: ["manage"] });
+    await GscTrackerKeywordService.setStartDate({
+      projectId: context.projectId,
+      id: data.id,
+      startDate: data.startDate,
+    });
+    return { startDate: data.startDate };
+  });

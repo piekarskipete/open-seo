@@ -7,6 +7,7 @@ import {
   gscTrackerLatestDay,
 } from "./gscTrackerDates";
 import { syncKeywords } from "./gscTrackerKeywordSync";
+import { keywordProgress } from "./gscTrackerKeywordProgress";
 import { comparableUrl, normalizeQuery } from "@/shared/gsc-tracker";
 
 // Followed phrases per project. Each costs a share of one Search Console
@@ -51,26 +52,41 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
   const months = availableMonths(now);
   const selected = months.includes(month) ? month : months[0];
   const days = monthDays(selected, now);
+  const monthStart = `${selected}-01`;
+  // From the previous month's start, for "last month" and the move into
+  // this month's first measured day.
   const [keywords, rows] = await Promise.all([
     GscTrackerKeywordRepository.list(projectId),
     days.length > 0
       ? GscTrackerKeywordRepository.listDays({
           projectId,
-          from: days[0],
+          from: `${addDays(monthStart, -1).slice(0, 7)}-01`,
           to: days[days.length - 1],
         })
       : Promise.resolve([]),
   ]);
 
+  const entries = await Promise.all(
+    keywords.map(async (keyword) => {
+      const own = rows.filter((row) => row.keywordId === keyword.id);
+      const progress = await keywordProgress({
+        keyword,
+        rows: own,
+        monthStart,
+      });
+      return { keyword, own, progress };
+    }),
+  );
+
   return {
     month: selected,
     months,
     days,
-    keywords: keywords.map((keyword) => {
+    keywords: entries.map(({ keyword, own, progress }) => {
       const target = comparableUrl(keyword.targetUrl);
       const pages = new Map<string, Record<string, DayMetrics>>();
-      for (const row of rows) {
-        if (row.keywordId !== keyword.id) continue;
+      for (const row of own) {
+        if (row.date < monthStart) continue;
         const pageDays = pages.get(row.page) ?? {};
         pageDays[row.date] = {
           position: row.position,
@@ -131,6 +147,7 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
         cannibalized: ranked.some((page) => page.stronger),
         outrankedDays,
         pages: ranked,
+        ...progress,
       };
     }),
   };
@@ -177,6 +194,16 @@ async function listTargets(projectId: string) {
   }));
 }
 
+/** Sets the day a phrase's progress is measured from; null goes back to
+ *  the day it was added. */
+async function setStartDate(input: {
+  projectId: string;
+  id: string;
+  startDate: string | null;
+}) {
+  await GscTrackerKeywordRepository.setStartDate(input);
+}
+
 async function remove(projectId: string, id: string) {
   await GscTrackerKeywordRepository.remove(projectId, id);
 }
@@ -185,5 +212,6 @@ export const GscTrackerKeywordService = {
   getMonth,
   add,
   listTargets,
+  setStartDate,
   remove,
 };

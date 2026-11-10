@@ -160,6 +160,53 @@ async function listDays(input: {
     );
 }
 
+/** Sets the day a phrase's progress is measured from; null resets it to the
+ *  day it was added. */
+async function setStartDate(input: {
+  projectId: string;
+  id: string;
+  startDate: string | null;
+}): Promise<void> {
+  await db
+    .update(gscTrackerKeywords)
+    .set({ startDate: input.startDate })
+    .where(
+      and(
+        eq(gscTrackerKeywords.id, input.id),
+        eq(gscTrackerKeywords.projectId, input.projectId),
+      ),
+    );
+}
+
+/** One phrase's stored page-days between two dates, oldest first. */
+async function listKeywordDays(input: {
+  keywordId: string;
+  from: string;
+  to: string;
+}) {
+  return db
+    .select({
+      date: gscTrackerKeywordDays.date,
+      page: gscTrackerPages.url,
+      clicks: gscTrackerKeywordDays.clicks,
+      impressions: gscTrackerKeywordDays.impressions,
+      position: gscTrackerKeywordDays.position,
+    })
+    .from(gscTrackerKeywordDays)
+    .innerJoin(
+      gscTrackerPages,
+      eq(gscTrackerPages.id, gscTrackerKeywordDays.pageId),
+    )
+    .where(
+      and(
+        eq(gscTrackerKeywordDays.keywordId, input.keywordId),
+        gte(gscTrackerKeywordDays.date, input.from),
+        lte(gscTrackerKeywordDays.date, input.to),
+      ),
+    )
+    .orderBy(gscTrackerKeywordDays.date);
+}
+
 export const GscTrackerKeywordRepository = {
   list,
   upsertMany,
@@ -167,4 +214,6 @@ export const GscTrackerKeywordRepository = {
   updateRange,
   replaceDay,
   listDays,
+  setStartDate,
+  listKeywordDays,
 };

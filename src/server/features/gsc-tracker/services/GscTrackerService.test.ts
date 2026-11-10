@@ -69,6 +69,7 @@ beforeAll(async () => {
     "drizzle/sqlite/0072_gsc_tracker_explorer_sort.sql",
     "drizzle/sqlite/0073_gsc_tracker_keyword_targets.sql",
     "drizzle/sqlite/0074_gsc_tracker_date_format.sql",
+    "drizzle/sqlite/0075_gsc_tracker_keyword_start.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
@@ -357,6 +358,50 @@ it("follows one phrase for two URLs as two entries, each with the day's pages", 
       ["https://x/a/", 2, false],
       ["https://x/b/", 6, true],
     ]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("shows a phrase's start, last month and latest positions with their moves", async () => {
+  vi.useFakeTimers({ now: new Date("2026-11-10T12:00:00Z"), toFake: ["Date"] });
+  try {
+    dayRows = () => [];
+    // October at 5; November at 3, improving to 2 on its last measured day.
+    phraseRows = (date) => [
+      {
+        keys: ["rebusy", "https://x/a/"],
+        clicks: 1,
+        impressions: 10,
+        position: date < "2026-11-01" ? 5 : date === "2026-11-08" ? 2 : 3,
+      },
+    ];
+    await service.enable({
+      projectId: "p1",
+      organizationId: "org1",
+      userId: "u1",
+    });
+    await keywords.add("p1", [{ query: "rebusy", targetUrl: "https://x/a/" }]);
+    // Each sync fetches eight more days; four reach back into October.
+    for (let i = 0; i < 4; i++) await service.syncNow("p1");
+    const [{ id } = { id: "" }] = (await keywords.getMonth("p1", "2026-11"))
+      .keywords;
+    await keywords.setStartDate({
+      projectId: "p1",
+      id,
+      startDate: "2026-10-20",
+    });
+
+    const [phrase] = (await keywords.getMonth("p1", "2026-11")).keywords;
+    expect(phrase).toMatchObject({
+      startDate: "2026-10-20",
+      startIsDefault: false,
+      start: { date: "2026-10-20", position: 5 },
+      latest: { date: "2026-11-08", position: 2, change: 1 },
+    });
+    expect(phrase?.lastMonth?.position).toBe(5);
+    // November averages (3 * 7 + 2) / 8; last month was 5.
+    expect(phrase?.lastMonth?.change).toBeCloseTo(5 - (3 * 7 + 2) / 8);
   } finally {
     vi.useRealTimers();
   }
