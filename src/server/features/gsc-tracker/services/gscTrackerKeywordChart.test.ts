@@ -144,3 +144,30 @@ it("measures progress since the start and between checkpoints", async () => {
     change: 2,
   });
 });
+
+it("charts a custom range against the same length before it", async () => {
+  const chart = await getKeywordChart({
+    projectId: "p1",
+    id: "k1",
+    from: "2026-11-05",
+    to: "2026-11-03",
+  });
+  // Ends in either order; three days, the previous three before them.
+  expect([chart.start, chart.end]).toEqual(["2026-11-03", "2026-11-05"]);
+  expect(chart.series.map((point) => point.date)).toEqual([
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+  ]);
+  expect(chart.current).toMatchObject({ clicks: 6, impressions: 40 });
+  expect(chart.previous.clicks).toBe(0);
+
+  await expect(
+    getKeywordChart({
+      projectId: "p1",
+      id: "k1",
+      from: "2024-01-01",
+      to: "2026-11-05",
+    }),
+  ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+});

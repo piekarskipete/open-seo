@@ -22,25 +22,47 @@ function total(days: Day[]) {
   );
 }
 
+// The longest custom range: Search Console keeps about 16 months.
+const MAX_RANGE_DAYS = 500;
+
 /**
- * A followed phrase on its target URL over the last `days` days: one point
+ * A followed phrase on its target URL over the last `days` days, or from
+ * `from` to `to`: one point
  * per day (days without impressions have no position), the period's totals
  * and per-day averages, and the previous period of the same length.
  */
 export async function getKeywordChart(input: {
   projectId: string;
   id: string;
-  days: number;
+  /** The last N days up to the newest fetched day... */
+  days?: number;
+  /** ...or a custom range, both ends inclusive. */
+  from?: string;
+  to?: string;
   now?: Date;
 }) {
   const keywords = await GscTrackerKeywordRepository.list(input.projectId);
   const keyword = keywords.find((entry) => entry.id === input.id);
   if (!keyword) throw new AppError("NOT_FOUND", "That phrase isn't followed.");
 
-  const end =
+  const newest =
     keyword.newestDate ?? gscTrackerLatestDay(input.now ?? new Date());
-  const start = addDays(end, -(input.days - 1));
-  const previousStart = addDays(start, -input.days);
+  let start: string;
+  let end: string;
+  if (input.from && input.to) {
+    [start, end] =
+      input.from <= input.to ? [input.from, input.to] : [input.to, input.from];
+    if (daysBetween(start, end) > MAX_RANGE_DAYS)
+      throw new AppError(
+        "VALIDATION_ERROR",
+        "Pick a range of up to 16 months.",
+      );
+  } else {
+    end = newest;
+    start = addDays(end, -((input.days ?? 28) - 1));
+  }
+  const length = daysBetween(start, end);
+  const previousStart = addDays(start, -length);
   const target = comparableUrl(keyword.targetUrl);
   const startDate = keyword.startDate ?? keyword.createdAt.slice(0, 10);
   const checkpoints = [keyword.checkpoint1Date, keyword.checkpoint2Date].filter(
@@ -90,7 +112,7 @@ export async function getKeywordChart(input: {
       : start;
   const fetchedDays = keyword.oldestDate
     ? Math.max(1, daysBetween(fetchedFrom, end))
-    : input.days;
+    : length;
 
   return {
     start,
