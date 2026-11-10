@@ -112,7 +112,9 @@ function subtractRange(end: Date, range: GscDateRange): Date {
   return d;
 }
 
-function sixteenMonthFloor(today: Date): string {
+/** The oldest day a request may start on; earlier start dates are clamped
+ *  to it. */
+export function sixteenMonthFloor(today: Date): string {
   return formatDate(subtractUtcMonths(today, 16));
 }
 

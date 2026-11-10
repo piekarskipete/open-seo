@@ -1,10 +1,9 @@
+import { sixteenMonthFloor } from "@/server/features/gsc/searchAnalytics";
 import { getOptionalEnvValue } from "@/server/lib/runtime-env";
 
 // Search Console shows fresh (still changing) data about two days back; the
 // tracker stores up to then and refetches the last days as they settle.
 const LATEST_DAY_LAG = 2;
-// Google keeps 16 months of Search Console data.
-const HISTORY_MONTHS = 16;
 
 const DEFAULT_ROWS_PER_DAY = 1000;
 const MAX_ROWS_PER_DAY = 25_000;
@@ -31,11 +30,11 @@ export function gscTrackerLatestDay(now: Date): string {
   return addDays(now.toISOString().slice(0, 10), -LATEST_DAY_LAG);
 }
 
-/** The oldest day Search Console still has. */
+/** The oldest day the tracker fetches: the same 16-month floor the request
+ *  builder clamps start dates to, so a single-day request is never turned
+ *  into an empty (and rejected) range. */
 export function gscTrackerFloor(now: Date): string {
-  const d = new Date(`${gscTrackerLatestDay(now)}T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() - HISTORY_MONTHS);
-  return addDays(d.toISOString().slice(0, 10), 1);
+  return sixteenMonthFloor(now);
 }
 
 /**
