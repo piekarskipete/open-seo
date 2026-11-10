@@ -176,3 +176,44 @@ export const gscTrackerKeywordDays = pgTable(
     ),
   ],
 );
+
+// Labels that group followed phrases. Each project keeps its own; the color
+// is a key from GSC_TRACKER_TAG_COLORS.
+export const gscTrackerTags = pgTable(
+  "gsc_tracker_tags",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color").notNull().default("blue"),
+    createdAt: text("created_at").notNull().default(isoNow),
+  },
+  (table) => [
+    uniqueIndex("gsc_tracker_tags_project_name_idx").on(
+      table.projectId,
+      table.name,
+    ),
+  ],
+);
+
+// Which tags a followed phrase carries; a phrase can carry several.
+export const gscTrackerKeywordTags = pgTable(
+  "gsc_tracker_keyword_tags",
+  {
+    keywordId: text("keyword_id")
+      .notNull()
+      .references(() => gscTrackerKeywords.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => gscTrackerTags.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("gsc_tracker_keyword_tags_idx").on(
+      table.keywordId,
+      table.tagId,
+    ),
+    index("gsc_tracker_keyword_tags_tag_idx").on(table.tagId),
+  ],
+);

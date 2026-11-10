@@ -7,6 +7,7 @@ import {
   gscTrackerPages,
 } from "@/db/schema";
 import { GscTrackerRepository } from "./GscTrackerRepository";
+import { GscTrackerTagRepository } from "./GscTrackerTagRepository";
 
 export type GscTrackerKeyword = typeof gscTrackerKeywords.$inferSelect;
 
@@ -61,6 +62,7 @@ async function upsertMany(
 }
 
 async function remove(projectId: string, id: string): Promise<void> {
+  await GscTrackerTagRepository.clearKeyword(id);
   await db
     .delete(gscTrackerKeywordDays)
     .where(eq(gscTrackerKeywordDays.keywordId, id));

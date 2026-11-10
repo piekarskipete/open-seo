@@ -140,6 +140,8 @@ export const {
   gscTrackerTotals,
   gscTrackerKeywords,
   gscTrackerKeywordDays,
+  gscTrackerTags,
+  gscTrackerKeywordTags,
   telemetryState,
   aiTrackers,
   aiPrompts,
