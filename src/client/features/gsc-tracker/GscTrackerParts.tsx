@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Line, LineChart, ReferenceLine } from "recharts";
 import { cn } from "cn";
 import { QueryError } from "@/client/components/QueryState";
@@ -34,6 +34,12 @@ import {
 } from "@/client/components/ui/table";
 import { getGscTrackerQuery } from "@/serverFunctions/gscTracker";
 import { TrackPageButton } from "@/client/features/gsc-tracker/GscTrackerTrackButton";
+import { RangePicker } from "@/client/features/gsc-tracker/GscTrackerRangePicker";
+import {
+  initialRange,
+  rangeRequest,
+  type ChartRange,
+} from "@/client/features/gsc-tracker/gscTrackerRange";
 import type { GscTrackerRangeDays } from "@/shared/gsc-tracker";
 import {
   formatDay,
@@ -237,9 +243,15 @@ export function QueryDetailDialog({
   onClose: () => void;
 }) {
   const formatMetric = useFormatMetric();
+  // Opens on the page's period; the dialog then picks its own.
+  const [range, setRange] = useState<ChartRange>(() => initialRange(days));
+  const request = rangeRequest(range);
   const detail = useQuery({
-    queryKey: ["gscTrackerQuery", projectId, query, days],
-    queryFn: () => getGscTrackerQuery({ data: { projectId, query, days } }),
+    queryKey: ["gscTrackerQuery", projectId, query, request],
+    queryFn: () =>
+      getGscTrackerQuery({ data: { projectId, query, ...request } }),
+    enabled: request !== null,
+    placeholderData: keepPreviousData,
   });
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -251,6 +263,7 @@ export function QueryDetailDialog({
             the tracker to follow the query with that page as its target.
           </DialogDescription>
         </DialogHeader>
+        <RangePicker value={range} onChange={setRange} />
         {detail.isPending ? (
           <Skeleton className="h-64 w-full" />
         ) : detail.isError ? (

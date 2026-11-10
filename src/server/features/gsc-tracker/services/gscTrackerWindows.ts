@@ -23,6 +23,24 @@ export function metrics(
   };
 }
 
+/** A custom window (both ends inclusive, in either order), and the window
+ *  of the same length before it. */
+export function customPeriods(from: string, to: string) {
+  const [currentStart, currentEnd] = from <= to ? [from, to] : [to, from];
+  const length =
+    Math.round(
+      (Date.parse(`${currentEnd}T00:00:00Z`) -
+        Date.parse(`${currentStart}T00:00:00Z`)) /
+        86_400_000,
+    ) + 1;
+  return {
+    currentStart,
+    currentEnd,
+    previousStart: addDays(currentStart, -length),
+    previousEnd: addDays(currentStart, -1),
+  };
+}
+
 /** The selected window ending at the newest stored day, and the one before. */
 export async function periods(projectId: string, days: number) {
   const tracker = await GscTrackerRepository.get(projectId);

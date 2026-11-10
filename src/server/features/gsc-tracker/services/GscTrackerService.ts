@@ -17,7 +17,7 @@ import {
   gscTrackerLatestDay,
 } from "./gscTrackerDates";
 import { syncTracker } from "./GscTrackerSyncService";
-import { metrics, periods } from "./gscTrackerWindows";
+import { customPeriods, metrics, periods } from "./gscTrackerWindows";
 import { compareQueries } from "./gscTrackerExplorer";
 import { syncKeywords } from "./gscTrackerKeywordSync";
 import {
@@ -192,9 +192,15 @@ async function getOverview(projectId: string, days: number) {
 async function getQueryDetail(input: {
   projectId: string;
   query: string;
-  days: number;
+  /** The last N days up to the newest stored day, or a custom range. */
+  days?: number;
+  from?: string;
+  to?: string;
 }) {
-  const range = await periods(input.projectId, input.days);
+  const range =
+    input.from && input.to
+      ? customPeriods(input.from, input.to)
+      : await periods(input.projectId, input.days ?? 28);
   if (!range) return null;
   const rows = await db
     .select({

@@ -22,7 +22,20 @@ const listSchema = rangeSchema.extend({
   search: z.string().max(200).optional(),
   page: z.string().max(2048).optional(),
 });
-const querySchema = rangeSchema.extend({ query: z.string().min(1).max(500) });
+const daySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// A query's detail: the last N days, or a custom range (both ends inclusive).
+const querySchema = projectSchema
+  .extend({
+    query: z.string().min(1).max(500),
+    days: z
+      .union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days)))
+      .optional(),
+    from: daySchema.optional(),
+    to: daySchema.optional(),
+  })
+  .refine((data) => data.days !== undefined || (data.from && data.to), {
+    message: "Pick a period or a date range.",
+  });
 const monthSchema = projectSchema.extend({
   month: z.string().regex(/^\d{4}-\d{2}$/),
 });
@@ -50,9 +63,24 @@ const checkpointsSchema = projectSchema.extend({
   ids: z.array(z.string().min(1)).min(1).max(1000),
   checkpoints: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(2),
 });
-const keywordChartSchema = keywordSchema.extend({
-  days: z.union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days))),
-});
+const keywordChartSchema = keywordSchema
+  .extend({
+    days: z
+      .union(GSC_TRACKER_CHART_DAYS.map((days) => z.literal(days)))
+      .optional(),
+    // A custom range instead of `days`, both ends inclusive.
+    from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  })
+  .refine((data) => data.days !== undefined || (data.from && data.to), {
+    message: "Pick a period or a date range.",
+  });
 const settingsSchema = projectSchema.extend({
   positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
   explorerSort: z.enum(GSC_TRACKER_SORT_KEYS).optional(),
@@ -125,6 +153,8 @@ export const getGscTrackerQuery = createServerFn({ method: "POST" })
       projectId: context.projectId,
       query: data.query,
       days: data.days,
+      from: data.from,
+      to: data.to,
     }),
   );
 
@@ -215,5 +245,7 @@ export const getGscTrackerKeywordChart = createServerFn({ method: "POST" })
       projectId: context.projectId,
       id: data.id,
       days: data.days,
+      from: data.from,
+      to: data.to,
     }),
   );

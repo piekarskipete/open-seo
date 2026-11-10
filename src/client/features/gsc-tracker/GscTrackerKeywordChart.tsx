@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { QueryError } from "@/client/components/QueryState";
-import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +9,12 @@ import {
   DialogTitle,
 } from "@/client/components/ui/dialog";
 import { Skeleton } from "@/client/components/ui/skeleton";
+import { RangePicker } from "@/client/features/gsc-tracker/GscTrackerRangePicker";
+import {
+  initialRange,
+  rangeRequest,
+  type ChartRange,
+} from "@/client/features/gsc-tracker/gscTrackerRange";
 import {
   MarkerLegend,
   RangeCard,
@@ -29,23 +34,11 @@ import {
   getGscTrackerKeywordChart,
   type getGscTrackerKeywords,
 } from "@/serverFunctions/gscTracker";
-import {
-  GSC_TRACKER_CHART_DAYS,
-  type GscTrackerChartDays,
-} from "@/shared/gsc-tracker";
 
 type Keyword = Awaited<
   ReturnType<typeof getGscTrackerKeywords>
 >["keywords"][number];
 type Chart = Awaited<ReturnType<typeof getGscTrackerKeywordChart>>;
-
-const PERIODS: { value: `${GscTrackerChartDays}`; label: string }[] = [
-  { value: "7", label: "7 days" },
-  { value: "28", label: "28 days" },
-  { value: "90", label: "3 months" },
-  { value: "180", label: "6 months" },
-  { value: "365", label: "12 months" },
-];
 
 const perDay = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
@@ -59,17 +52,15 @@ export function KeywordChartDialog({
   keyword: Keyword;
   onClose: () => void;
 }) {
-  const [period, setPeriod] = useState<`${GscTrackerChartDays}`>("28");
+  const [range, setRange] = useState<ChartRange>(() => initialRange());
+  const request = rangeRequest(range);
   const chart = useQuery({
-    queryKey: ["gscTrackerKeywordChart", projectId, keyword.id, period],
+    queryKey: ["gscTrackerKeywordChart", projectId, keyword.id, request],
     queryFn: () =>
       getGscTrackerKeywordChart({
-        data: {
-          projectId,
-          id: keyword.id,
-          days: GSC_TRACKER_CHART_DAYS.find((d) => `${d}` === period) ?? 28,
-        },
+        data: { projectId, id: keyword.id, ...request },
       }),
+    enabled: request !== null,
     placeholderData: keepPreviousData,
   });
   return (
@@ -81,12 +72,7 @@ export function KeywordChartDialog({
             {keyword.targetUrl}
           </DialogDescription>
         </DialogHeader>
-        <SegmentedToggle
-          showLabels
-          value={period}
-          onChange={setPeriod}
-          items={PERIODS.map((item) => ({ ...item, icon: null }))}
-        />
+        <RangePicker value={range} onChange={setRange} />
         {chart.isPending ? (
           <Skeleton className="h-80 w-full" />
         ) : chart.isError ? (
