@@ -38,6 +38,7 @@ import {
   type SearchPerformanceTableDimension,
 } from "@/types/schemas/search-performance";
 import { saveKeywords } from "@/serverFunctions/keywords";
+import { TrackInGscButton } from "@/client/features/gsc-tracker/GscTrackerTrackInGsc";
 import { TrackRankingsMenu } from "./TrackRankingsMenu";
 
 export type ExportTarget = "csv" | "sheets";
@@ -295,9 +296,8 @@ export function StrikingDistanceTable({
   });
   const isPastEnd = page > 1 && table.getRowModel().rows.length === 0;
 
-  const selectedQueries = table
-    .getSelectedRowModel()
-    .rows.map((row) => row.original.query);
+  const selectedRows = table.getSelectedRowModel().rows;
+  const selectedQueries = selectedRows.map((row) => row.original.query);
 
   const copyKeywords = async () => {
     try {
@@ -407,6 +407,14 @@ export function StrikingDistanceTable({
             <TrackRankingsMenu
               projectId={projectId}
               queries={selectedQueries}
+              onAdded={() => setRowSelection({})}
+            />
+            <TrackInGscButton
+              projectId={projectId}
+              entries={selectedRows.map((row) => ({
+                query: row.original.query,
+                targetUrl: row.original.page,
+              }))}
               onAdded={() => setRowSelection({})}
             />
           </div>
