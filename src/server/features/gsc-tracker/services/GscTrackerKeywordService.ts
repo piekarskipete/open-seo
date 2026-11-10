@@ -8,6 +8,7 @@ import {
 } from "./gscTrackerDates";
 import { syncKeywords } from "./gscTrackerKeywordSync";
 import { keywordProgress } from "./gscTrackerKeywordProgress";
+import { GscTrackerTagService } from "./GscTrackerTagService";
 import { comparableUrl, normalizeQuery } from "@/shared/gsc-tracker";
 
 // Followed phrases per project. Each costs a share of one Search Console
@@ -55,7 +56,7 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
   const monthStart = `${selected}-01`;
   // From the previous month's start, for "last month" and the move into
   // this month's first measured day.
-  const [keywords, rows] = await Promise.all([
+  const [keywords, rows, tagIds] = await Promise.all([
     GscTrackerKeywordRepository.list(projectId),
     days.length > 0
       ? GscTrackerKeywordRepository.listDays({
@@ -64,6 +65,7 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
           to: days[days.length - 1],
         })
       : Promise.resolve([]),
+    GscTrackerTagService.tagsByKeyword(projectId),
   ]);
 
   const entries = await Promise.all(
@@ -146,6 +148,7 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
         newestDate: keyword.newestDate,
         cannibalized: ranked.some((page) => page.stronger),
         competingPages: ranked.filter((page) => page.stronger).length,
+        tagIds: tagIds.get(keyword.id) ?? [],
         outrankedDays,
         pages: ranked,
         ...progress,

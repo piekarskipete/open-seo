@@ -70,6 +70,7 @@ beforeAll(async () => {
     "drizzle/sqlite/0073_gsc_tracker_keyword_targets.sql",
     "drizzle/sqlite/0074_gsc_tracker_date_format.sql",
     "drizzle/sqlite/0075_gsc_tracker_keyword_start.sql",
+    "drizzle/sqlite/0076_gsc_tracker_tags.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
@@ -86,7 +87,7 @@ afterAll(() => {
 
 beforeEach(async () => {
   await client.executeMultiple(
-    "DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_projects;",
+    "DELETE FROM gsc_tracker_keyword_tags; DELETE FROM gsc_tracker_tags; DELETE FROM gsc_tracker_keyword_days; DELETE FROM gsc_tracker_keywords; DELETE FROM gsc_tracker_rows; DELETE FROM gsc_tracker_totals; DELETE FROM gsc_tracker_queries; DELETE FROM gsc_tracker_pages; DELETE FROM gsc_tracker_projects;",
   );
   gsc.getConnection.mockResolvedValue({ siteUrl: "sc-domain:example.com" });
   gsc.getPerformance.mockImplementation(

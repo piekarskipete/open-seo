@@ -10,6 +10,7 @@ import {
   gscTrackerRows,
   gscTrackerTotals,
 } from "@/db/schema";
+import { GscTrackerTagRepository } from "./GscTrackerTagRepository";
 
 export type GscTrackerProject = typeof gscTrackerProjects.$inferSelect;
 
@@ -120,6 +121,7 @@ async function clearHistory(projectId: string): Promise<void> {
 /** Stops tracking and deletes everything stored for the project. */
 async function remove(projectId: string): Promise<void> {
   await clearHistory(projectId);
+  await GscTrackerTagRepository.clearProject(projectId);
   await db
     .delete(gscTrackerKeywords)
     .where(eq(gscTrackerKeywords.projectId, projectId));

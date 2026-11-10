@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { EmptyState } from "@/client/components/EmptyState";
 import { QueryError } from "@/client/components/QueryState";
-import { Badge } from "@/client/components/ui/badge";
 import { Button } from "@/client/components/ui/button";
+import { Checkbox } from "@/client/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -13,21 +13,27 @@ import {
   SelectValue,
 } from "@/client/components/ui/select";
 import { Skeleton } from "@/client/components/ui/skeleton";
-import {
-  formatMetric,
-  usePositionFormat,
-} from "@/client/features/gsc-tracker/gscTrackerView";
 import { AddPhrasesDialog } from "@/client/features/gsc-tracker/GscTrackerAddPhrases";
+import {
+  KeywordRow,
+  MetricColumns,
+} from "@/client/features/gsc-tracker/GscTrackerKeywordRow";
 import { KeywordDetail } from "@/client/features/gsc-tracker/GscTrackerKeywordDetail";
 import {
-  StartCell,
-  TrendCell,
-} from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
+  SelectionBar,
+  TagFilter,
+} from "@/client/features/gsc-tracker/GscTrackerKeywordToolbar";
+import { TagManagerDialog } from "@/client/features/gsc-tracker/GscTrackerTagManager";
+import {
+  matchesTagFilter,
+  UNTAGGED,
+  useTags,
+  type Tag,
+} from "@/client/features/gsc-tracker/gscTrackerTags";
 import { getGscTrackerKeywords } from "@/serverFunctions/gscTracker";
 
 type Month = Awaited<ReturnType<typeof getGscTrackerKeywords>>;
 type Keyword = Month["keywords"][number];
-type Page = Keyword["pages"][number];
 
 function monthLabel(month: string): string {
   return new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", {
@@ -49,10 +55,29 @@ export function KeywordsTab({
   );
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [managingTags, setManagingTags] = useState(false);
   const result = useQuery({
     queryKey: ["gscTrackerKeywords", projectId, month],
     queryFn: () => getGscTrackerKeywords({ data: { projectId, month } }),
   });
+  const tags = useTags(projectId).data ?? [];
+  // A deleted tag drops out of the filter, and with no tags left there is
+  // nothing to filter by.
+  const activeFilter = new Set(
+    [...tagFilter].filter(
+      (id) =>
+        tags.some((tag) => tag.id === id) ||
+        (id === UNTAGGED && tags.length > 0),
+    ),
+  );
+  const visible = (result.data?.keywords ?? []).filter((keyword) =>
+    matchesTagFilter(keyword.tagIds, activeFilter),
+  );
+  // Only phrases still on screen count as selected, so a filter change
+  // never tags phrases the user can't see.
+  const selection = visible.filter((keyword) => selected.has(keyword.id));
   const toggle = (id: string) =>
     setExpanded((current) => {
       const next = new Set(current);
@@ -113,14 +138,53 @@ export function KeywordsTab({
           description="Add a phrase and the URL that should rank for it to see its position every day."
         />
       ) : (
-        <KeywordTable
-          projectId={projectId}
-          data={result.data}
-          expanded={expanded}
-          onToggle={toggle}
-          canManage={canManage}
-        />
+        <>
+          {tags.length > 0 ? (
+            <TagFilter
+              tags={tags}
+              value={activeFilter}
+              onChange={setTagFilter}
+            />
+          ) : null}
+          {selection.length > 0 ? (
+            <SelectionBar
+              projectId={projectId}
+              selected={selection.map((keyword) => keyword.id)}
+              tags={tags}
+              tagsOnSelection={
+                new Set(selection.flatMap((keyword) => keyword.tagIds))
+              }
+              onClear={() => setSelected(new Set())}
+              onManageTags={() => setManagingTags(true)}
+            />
+          ) : null}
+          {visible.length === 0 ? (
+            <EmptyState
+              kind="filtered"
+              title="No phrases with these tags"
+              description="Choose other tags or clear the filter."
+            />
+          ) : (
+            <KeywordTable
+              projectId={projectId}
+              data={result.data}
+              keywords={visible}
+              tags={tags}
+              expanded={expanded}
+              onToggle={toggle}
+              canManage={canManage}
+              selected={selected}
+              onSelect={setSelected}
+            />
+          )}
+        </>
       )}
+      {managingTags ? (
+        <TagManagerDialog
+          projectId={projectId}
+          onClose={() => setManagingTags(false)}
+        />
+      ) : null}
       {adding ? (
         <AddPhrasesDialog
           projectId={projectId}
@@ -135,19 +199,50 @@ export function KeywordsTab({
 function KeywordTable({
   projectId,
   data,
+  keywords,
+  tags,
   expanded,
   onToggle,
   canManage,
+  selected,
+  onSelect,
 }: {
   projectId: string;
   data: Month;
+  /** The phrases the tag filter keeps. */
+  keywords: Keyword[];
+  tags: Tag[];
   expanded: Set<string>;
   onToggle: (id: string) => void;
   canManage: boolean;
+  selected: Set<string>;
+  onSelect: (next: Set<string>) => void;
 }) {
+  const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+  const shownSelected = keywords.filter((k) => selected.has(k.id)).length;
+  const setOne = (id: string, checked: boolean) => {
+    const next = new Set(selected);
+    if (checked) next.add(id);
+    else next.delete(id);
+    onSelect(next);
+  };
   return (
     <div className="divide-y rounded-lg border bg-card">
       <div className="flex items-center gap-4 px-3 py-2 text-xs font-medium text-muted-foreground">
+        {canManage ? (
+          <Checkbox
+            aria-label="Select all shown phrases"
+            checked={shownSelected > 0 && shownSelected === keywords.length}
+            indeterminate={shownSelected > 0 && shownSelected < keywords.length}
+            onCheckedChange={(checked) =>
+              onSelect(
+                checked
+                  ? new Set(keywords.map((keyword) => keyword.id))
+                  : new Set(),
+              )
+            }
+          />
+        ) : null}
         <span className="flex-1">Phrase / target URL</span>
         <MetricColumns
           values={["Clicks", "Impr.", "CTR", "Position"]}
@@ -157,12 +252,15 @@ function KeywordTable({
         <span className="w-20 shrink-0 text-right">Last month</span>
         <span className="w-20 shrink-0 text-right">Latest</span>
       </div>
-      {data.keywords.map((keyword) => (
+      {keywords.map((keyword) => (
         <div key={keyword.id}>
           <KeywordRow
             projectId={projectId}
             canManage={canManage}
             keyword={keyword}
+            tags={keyword.tagIds.flatMap((id) => tagsById.get(id) ?? [])}
+            checked={selected.has(keyword.id)}
+            onCheck={(checked) => setOne(keyword.id, checked)}
             open={expanded.has(keyword.id)}
             onToggle={() => onToggle(keyword.id)}
           />
@@ -176,119 +274,6 @@ function KeywordTable({
           ) : null}
         </div>
       ))}
-    </div>
-  );
-}
-
-/** Four right-aligned columns: clicks, impressions, CTR, position. */
-function MetricColumns({
-  values,
-  label,
-}: {
-  values: [string, string, string, string];
-  label?: string;
-}) {
-  return (
-    <span
-      className="grid shrink-0 grid-cols-4 gap-2 text-right tabular-nums"
-      aria-label={label}
-    >
-      {values.map((value, index) => (
-        <span key={index} className="w-14 sm:w-16">
-          {value}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function useMonthValues() {
-  const positionFormat = usePositionFormat();
-  return (page: Page | undefined): [string, string, string, string] => [
-    formatMetric("clicks", page?.clicks ?? null),
-    formatMetric("impressions", page?.impressions ?? null),
-    formatMetric(
-      "ctr",
-      page && page.impressions > 0 ? page.clicks / page.impressions : null,
-    ),
-    formatMetric("position", page?.position ?? null, positionFormat),
-  ];
-}
-
-function KeywordRow({
-  projectId,
-  canManage,
-  keyword,
-  open,
-  onToggle,
-}: {
-  projectId: string;
-  canManage: boolean;
-  keyword: Keyword;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const monthValues = useMonthValues();
-  const target = keyword.pages.find((page) => page.isTarget);
-  return (
-    <div className="flex w-full items-center gap-4 px-3 py-2.5 text-sm hover:bg-muted/40">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex min-w-0 flex-1 items-center gap-4 text-left"
-      >
-        <span className="flex min-w-0 flex-1 items-start gap-1.5">
-          {open ? (
-            <ChevronDown className="mt-0.5 size-3.5 shrink-0" />
-          ) : (
-            <ChevronRight className="mt-0.5 size-3.5 shrink-0" />
-          )}
-          <span className="min-w-0">
-            <span className="font-medium">{keyword.query}</span>
-            {keyword.cannibalized ? (
-              <Badge
-                variant="warning"
-                className="ml-2"
-                title={`${keyword.competingPages} other page${keyword.competingPages === 1 ? "" : "s"} earned more clicks or impressions for this phrase this month`}
-              >
-                Competing pages ({keyword.competingPages})
-              </Badge>
-            ) : null}
-            <span className="block truncate text-xs text-muted-foreground">
-              {keyword.targetUrl}
-            </span>
-            {keyword.newestDate ? null : (
-              <span className="block text-xs text-muted-foreground">
-                Fetching the first days…
-              </span>
-            )}
-          </span>
-        </span>
-        <MetricColumns values={monthValues(target)} />
-      </button>
-      <span className="flex shrink-0 items-center gap-4 tabular-nums">
-        <StartCell
-          projectId={projectId}
-          keywordId={keyword.id}
-          startDate={keyword.startDate}
-          startIsDefault={keyword.startIsDefault}
-          start={keyword.start}
-          canManage={canManage}
-        />
-        <TrendCell
-          value={keyword.lastMonth}
-          title="Last month's average position, and the move into this month"
-        />
-        <TrendCell
-          value={keyword.latest}
-          title={
-            keyword.latest
-              ? `Position on the month's last measured day (${keyword.latest.date}), and the move since the day before`
-              : undefined
-          }
-        />
-      </span>
     </div>
   );
 }
