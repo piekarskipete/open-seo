@@ -149,6 +149,9 @@ async function getMonth(projectId: string, month: string, now = new Date()) {
         cannibalized: ranked.some((page) => page.stronger),
         competingPages: ranked.filter((page) => page.stronger).length,
         tagIds: tagIds.get(keyword.id) ?? [],
+        checkpoints: [keyword.checkpoint1Date, keyword.checkpoint2Date].filter(
+          (date): date is string => date !== null,
+        ),
         outrankedDays,
         pages: ranked,
         ...progress,
@@ -211,6 +214,26 @@ async function setStartDate(input: {
   });
 }
 
+/** Replaces the checkpoints (up to two days) of several phrases. */
+async function setCheckpoints(input: {
+  projectId: string;
+  ids: string[];
+  checkpoints: string[];
+}) {
+  const days = [...new Set(input.checkpoints)];
+  if (days.length === 2 && (days[1] ?? "") < (days[0] ?? "")) days.reverse();
+  if (days.length > 2)
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "A phrase takes up to two checkpoints.",
+    );
+  await GscTrackerKeywordRepository.setCheckpoints({
+    projectId: input.projectId,
+    ids: [...new Set(input.ids)],
+    checkpoints: [days[0] ?? null, days[1] ?? null],
+  });
+}
+
 async function remove(projectId: string, id: string) {
   await GscTrackerKeywordRepository.remove(projectId, id);
 }
@@ -220,5 +243,6 @@ export const GscTrackerKeywordService = {
   add,
   listTargets,
   setStartDate,
+  setCheckpoints,
   remove,
 };

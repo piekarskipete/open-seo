@@ -33,6 +33,7 @@ Both module branches were cut from the same `main`, so their migrations start at
 | GSC Tracker day format                  | `0074` | `0052`   | `0073` / `0051`      |
 | GSC Tracker phrase start date           | `0075` | `0053`   | `0074` / `0052`      |
 | GSC Tracker tags                        | `0076` | `0054`   | `0075` / `0053`      |
+| GSC Tracker phrase checkpoints          | `0077` | `0055`   | `0076` / `0054`      |
 
 A database created from `combined` must keep using `combined`'s numbering.
 

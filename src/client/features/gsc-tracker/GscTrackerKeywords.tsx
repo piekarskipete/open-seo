@@ -158,6 +158,7 @@ export function KeywordsTab({
               anyCustomStart={selection.some(
                 (keyword) => !keyword.startIsDefault,
               )}
+              checkpoints={selection[0]?.checkpoints ?? []}
               onClear={() => setSelected(new Set())}
               onManageTags={() => setManagingTags(true)}
             />

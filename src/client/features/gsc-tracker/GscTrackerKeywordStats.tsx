@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { Button } from "@/client/components/ui/button";
@@ -20,7 +20,12 @@ import {
   usePositionFormat,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
-import { setGscTrackerKeywordStart } from "@/serverFunctions/gscTracker";
+import {
+  setGscTrackerKeywordCheckpoints,
+  setGscTrackerKeywordStart,
+} from "@/serverFunctions/gscTracker";
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A day with its year: "03.10.2026" or "Oct 3, 2026". */
 function fullDay(day: string, dateFormat: "dd.mm" | "mon-d"): string {
@@ -158,9 +163,134 @@ export function StartDateButton({
           ) : null}
           <Button
             size="sm"
-            disabled={!/^\d{4}-\d{2}-\d{2}$/.test(value)}
+            disabled={!DAY.test(value)}
             pending={save.isPending}
             onClick={() => save.mutate(value)}
+          >
+            Save
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * "Checkpoints" for one phrase or every selected one: up to two days to
+ * measure progress up to, shown on the phrase's chart.
+ */
+export function CheckpointsButton({
+  projectId,
+  ids,
+  initial,
+  outline = false,
+}: {
+  projectId: string;
+  ids: string[];
+  /** The days the picker opens on. */
+  initial: string[];
+  outline?: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [first, setFirst] = useState(initial[0] ?? "");
+  const [second, setSecond] = useState(initial[1] ?? "");
+  const many = ids.length > 1;
+  const save = useMutation({
+    meta: { errorToast: false },
+    mutationFn: (checkpoints: string[]) =>
+      setGscTrackerKeywordCheckpoints({
+        data: { projectId, ids, checkpoints },
+      }),
+    onSuccess: (result) => {
+      setOpen(false);
+      if (many) toast.success(`Checkpoints set for ${result.updated} phrases`);
+      void queryClient.invalidateQueries({
+        queryKey: ["gscTrackerKeywords", projectId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["gscTrackerKeywordChart", projectId],
+      });
+    },
+  });
+  const days = [first, second].filter((day) => DAY.test(day));
+  const disorder = days.length === 2 && second <= first;
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) {
+          setFirst(initial[0] ?? "");
+          setSecond(initial[1] ?? "");
+        }
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            variant={outline ? "outline" : "ghost"}
+            size={outline ? "sm" : "xs"}
+            className={outline ? undefined : "text-muted-foreground"}
+          />
+        }
+      >
+        <Flag className="size-3.5" />
+        {initial.length > 0 ? `Checkpoints (${initial.length})` : "Checkpoints"}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72">
+        <PopoverHeader>
+          <PopoverTitle>
+            {many ? `Checkpoints for ${ids.length} phrases` : "Checkpoints"}
+          </PopoverTitle>
+          <PopoverDescription>
+            Up to two days to measure progress to. With one, the chart shows
+            start to checkpoint; with two, checkpoint 1 to checkpoint 2.
+          </PopoverDescription>
+        </PopoverHeader>
+        <label className="space-y-1 text-xs">
+          <span>Checkpoint 1</span>
+          <Input
+            type="date"
+            value={first}
+            onChange={(event) => setFirst(event.target.value)}
+          />
+        </label>
+        <label className="space-y-1 text-xs">
+          <span>Checkpoint 2 (optional)</span>
+          <Input
+            type="date"
+            value={second}
+            disabled={!DAY.test(first)}
+            onChange={(event) => setSecond(event.target.value)}
+          />
+        </label>
+        {disorder ? (
+          <p role="alert" className="text-xs text-destructive">
+            Checkpoint 2 has to come after checkpoint 1.
+          </p>
+        ) : null}
+        {save.error ? (
+          <p role="alert" className="text-xs text-destructive">
+            {getStandardErrorMessage(save.error)}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-1">
+          {initial.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={save.isPending}
+              onClick={() => save.mutate([])}
+            >
+              Remove checkpoints
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            disabled={days.length === 0 || disorder}
+            pending={save.isPending}
+            onClick={() => save.mutate(days)}
           >
             Save
           </Button>

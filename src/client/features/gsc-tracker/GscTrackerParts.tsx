@@ -126,16 +126,20 @@ type SeriesPoint = { date: string } & Record<Metric, number | null>;
 export function TrendChart({
   series,
   initialMetric = "clicks",
-  start,
+  markers = [],
+  startPosition = null,
 }: {
   series: SeriesPoint[];
   initialMetric?: Metric;
-  /** A followed phrase's start: its date, and its position then. */
-  start?: { date: string; position: number | null };
+  /** Days marked with a dashed vertical line, such as a phrase's start. */
+  markers?: { date: string; label: string }[];
+  /** A dashed horizontal line on the position chart. */
+  startPosition?: number | null;
 }) {
   const formatMetric = useFormatMetric();
-  const startInRange =
-    start !== undefined && series.some((point) => point.date === start.date);
+  const shownMarkers = markers.filter((marker) =>
+    series.some((point) => point.date === marker.date),
+  );
   const [metric, setMetric] = useState<Metric>(initialMetric);
   const config: ChartConfig = {
     [metric]: { label: METRIC_LABELS[metric], color: "var(--chart-1)" },
@@ -181,30 +185,25 @@ export function TrendChart({
               />
             }
           />
-          {startInRange ? (
+          {shownMarkers.map((marker) => (
             <ReferenceLine
-              x={start.date}
+              key={marker.label}
+              x={marker.date}
               stroke="var(--muted-foreground)"
               strokeDasharray="4 4"
               label={{
-                value: "Start",
+                value: marker.label,
                 position: "insideTopLeft",
                 fontSize: 11,
                 fill: "var(--muted-foreground)",
               }}
             />
-          ) : null}
-          {metric === "position" && start?.position != null ? (
+          ))}
+          {metric === "position" && startPosition !== null ? (
             <ReferenceLine
-              y={start.position}
-              stroke="var(--chart-2)"
-              strokeDasharray="4 4"
-              label={{
-                value: `Start position ${formatMetric("position", start.position)}`,
-                position: "insideBottomRight",
-                fontSize: 11,
-                fill: "var(--chart-2)",
-              }}
+              y={startPosition}
+              stroke="var(--muted-foreground)"
+              strokeDasharray="2 4"
             />
           ) : null}
           <Line

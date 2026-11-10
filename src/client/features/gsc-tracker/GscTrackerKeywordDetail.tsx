@@ -5,7 +5,10 @@ import { cn } from "cn";
 import { Badge } from "@/client/components/ui/badge";
 import { ConfirmDialog } from "@/client/components/ConfirmDialog";
 import { Button } from "@/client/components/ui/button";
-import { StartDateButton } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
+import {
+  CheckpointsButton,
+  StartDateButton,
+} from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
 import {
   formatDayLabel,
   formatPosition,
@@ -156,6 +159,11 @@ export function KeywordDetail({
             initialDate={keyword.startDate}
             canReset={!keyword.startIsDefault}
             className="text-muted-foreground"
+          />
+          <CheckpointsButton
+            projectId={projectId}
+            ids={[keyword.id]}
+            initial={keyword.checkpoints}
           />
           <Button
             variant="ghost"

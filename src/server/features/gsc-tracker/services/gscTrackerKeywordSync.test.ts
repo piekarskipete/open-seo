@@ -27,6 +27,8 @@ function keyword(
     query: id,
     targetUrl: "https://x/",
     startDate: null,
+    checkpoint1Date: null,
+    checkpoint2Date: null,
     lastSyncedAt: range.newestDate ? fresh : null,
     createdAt: "2026-11-01",
     ...range,
