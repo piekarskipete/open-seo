@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { planSyncDays } from "./gscTrackerPlan";
+import { sixteenMonthFloor } from "@/server/features/gsc/searchAnalytics";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@/server/features/gsc/services/GscService", () => ({
@@ -79,5 +80,19 @@ describe("planSyncDays", () => {
       "2026-10-07",
     ]);
     expect(plan.backward).toEqual([]);
+  });
+
+  it("never plans a day before the floor requests are clamped to", () => {
+    // A day before it would become an empty range Google rejects.
+    const plan = planSyncDays(
+      {
+        oldestDate: "2025-07-14",
+        newestDate: "2026-11-08",
+        lastSyncedAt: fresh,
+      },
+      now,
+      50,
+    );
+    expect(plan.backward.at(-1)).toBe(sixteenMonthFloor(now));
   });
 });
