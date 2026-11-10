@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { Badge } from "@/client/components/ui/badge";
+import { ConfirmDialog } from "@/client/components/ConfirmDialog";
 import { Button } from "@/client/components/ui/button";
+import { StartDateButton } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
 import {
   formatDayLabel,
   formatPosition,
@@ -109,6 +112,7 @@ export function KeywordDetail({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
+  const [confirmStop, setConfirmStop] = useState(false);
   const outranked = new Set(keyword.outrankedDays);
   const target = keyword.pages.find((page) => page.isTarget);
   const stronger = keyword.pages.filter((page) => page.stronger);
@@ -117,6 +121,7 @@ export function KeywordDetail({
       removeGscTrackerKeyword({ data: { projectId, id: keyword.id } }),
     onSuccess: () => {
       toast.success(`Stopped following “${keyword.query}”`);
+      setConfirmStop(false);
       void queryClient.invalidateQueries({
         queryKey: ["gscTrackerKeywords", projectId],
       });
@@ -144,15 +149,37 @@ export function KeywordDetail({
         </ul>
       ) : null}
       {canManage ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="-ml-2 text-muted-foreground hover:text-destructive"
+        <div className="-ml-2 flex flex-wrap items-center gap-1">
+          <StartDateButton
+            projectId={projectId}
+            ids={[keyword.id]}
+            initialDate={keyword.startDate}
+            canReset={!keyword.startIsDefault}
+            className="text-muted-foreground"
+          />
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => setConfirmStop(true)}
+          >
+            Stop following this phrase
+          </Button>
+        </div>
+      ) : null}
+      {confirmStop ? (
+        <ConfirmDialog
+          title={`Stop following “${keyword.query}”?`}
+          confirmLabel="Stop following"
+          destructive
           pending={remove.isPending}
-          onClick={() => remove.mutate()}
+          onConfirm={() => remove.mutate()}
+          onClose={() => setConfirmStop(false)}
         >
-          Stop following this phrase
-        </Button>
+          Its daily positions for {keyword.targetUrl} are deleted, along with
+          its tags and start date. You can follow it again later; its history is
+          then fetched again from Search Console.
+        </ConfirmDialog>
       ) : null}
     </div>
   );

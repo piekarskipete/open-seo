@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/client/components/ui/dropdown-menu";
+import { StartDateButton } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
 import { TagChip } from "@/client/features/gsc-tracker/GscTrackerTagChip";
 import {
   refreshTags,
@@ -84,11 +85,17 @@ export function SelectionBar({
   selected,
   tags,
   tagsOnSelection,
+  startDate,
+  anyCustomStart,
   onClear,
   onManageTags,
 }: {
   projectId: string;
   selected: string[];
+  /** The date the start-date picker opens on. */
+  startDate: string;
+  /** Whether a selected phrase has a start date set by hand. */
+  anyCustomStart: boolean;
   tags: Tag[];
   /** Tag ids at least one selected phrase carries. */
   tagsOnSelection: ReadonlySet<string>;
@@ -135,6 +142,13 @@ export function SelectionBar({
         tags={removable}
         disabled={apply.isPending || removable.length === 0}
         onPick={(tag) => apply.mutate({ tag, action: "remove" })}
+      />
+      <StartDateButton
+        projectId={projectId}
+        ids={selected}
+        initialDate={startDate}
+        canReset={anyCustomStart}
+        outline
       />
       <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
         Clear selection

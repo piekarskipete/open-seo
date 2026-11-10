@@ -202,10 +202,13 @@ async function listTargets(projectId: string) {
  *  the day it was added. */
 async function setStartDate(input: {
   projectId: string;
-  id: string;
+  ids: string[];
   startDate: string | null;
 }) {
-  await GscTrackerKeywordRepository.setStartDate(input);
+  await GscTrackerKeywordRepository.setStartDate({
+    ...input,
+    ids: [...new Set(input.ids)],
+  });
 }
 
 async function remove(projectId: string, id: string) {

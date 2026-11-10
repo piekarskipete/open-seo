@@ -154,6 +154,10 @@ export function KeywordsTab({
               tagsOnSelection={
                 new Set(selection.flatMap((keyword) => keyword.tagIds))
               }
+              startDate={selection[0]?.startDate ?? ""}
+              anyCustomStart={selection.some(
+                (keyword) => !keyword.startIsDefault,
+              )}
               onClear={() => setSelected(new Set())}
               onManageTags={() => setManagingTags(true)}
             />
