@@ -8,6 +8,7 @@ import { Skeleton } from "@/client/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/client/components/ui/tabs";
 import { History } from "lucide-react";
 import {
+  HistoryNotice,
   StartTracking,
   TrackerStatus,
 } from "@/client/features/gsc-tracker/GscTrackerSetup";
@@ -119,6 +120,11 @@ export function GscTrackerPage({
                 <TrackerReport
                   projectId={projectId}
                   canManage={status.data.canManage}
+                  history={{
+                    oldestDate: status.data.oldestDate,
+                    newestDate: status.data.newestDate,
+                    progress: status.data.progress,
+                  }}
                   tab={tab}
                   days={days}
                   onChange={onChange}
@@ -141,12 +147,15 @@ export function GscTrackerPage({
 function TrackerReport({
   projectId,
   canManage,
+  history,
   tab,
   days,
   onChange,
 }: {
   projectId: string;
   canManage: boolean;
+  /** The stored history, to flag periods that reach past it. */
+  history: { oldestDate: string | null; newestDate: string; progress: number };
   tab: GscTrackerTab;
   days: GscTrackerRangeDays;
   onChange: (update: {
@@ -187,6 +196,7 @@ function TrackerReport({
           />
         )}
       </div>
+      {tab === "keywords" ? null : <HistoryNotice {...history} days={days} />}
       {tab === "keywords" ? (
         <KeywordsTab projectId={projectId} canManage={canManage} />
       ) : tab === "overview" ? (
