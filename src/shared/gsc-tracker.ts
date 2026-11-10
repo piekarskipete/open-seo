@@ -18,6 +18,16 @@ export const GSC_TRACKER_POSITION_FORMATS = ["decimal", "whole"] as const;
 export type GscTrackerPositionFormat =
   (typeof GSC_TRACKER_POSITION_FORMATS)[number];
 
+/** Columns Query Explorer sorts by, and a project's default order. */
+export const GSC_TRACKER_SORT_KEYS = [
+  "clicks",
+  "impressions",
+  "ctr",
+  "position",
+] as const;
+
+export type GscTrackerSortKey = (typeof GSC_TRACKER_SORT_KEYS)[number];
+
 /** Search Console reports queries lowercased with single spaces. */
 export function normalizeQuery(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, " ");

@@ -22,13 +22,16 @@ import {
   PopoverTrigger,
 } from "@/client/components/ui/popover";
 import {
-  setGscTrackerPositionFormat,
+  updateGscTrackerSettings,
   startGscTracker,
   stopGscTracker,
   syncGscTracker,
   type getGscTrackerStatus,
 } from "@/serverFunctions/gscTracker";
-import type { GscTrackerPositionFormat } from "@/shared/gsc-tracker";
+import type {
+  GscTrackerPositionFormat,
+  GscTrackerSortKey,
+} from "@/shared/gsc-tracker";
 
 // Turning the tracker on and off, and its sync status.
 
@@ -152,6 +155,7 @@ export function TrackerStatus({
             <TrackerSettings
               projectId={projectId}
               positionFormat={status.positionFormat}
+              explorerSort={status.explorerSort}
             />
             <Button
               variant="ghost"
@@ -194,25 +198,39 @@ const POSITION_FORMATS: {
   { value: "whole", label: "7" },
 ];
 
+const SORT_KEYS: { value: GscTrackerSortKey; label: string }[] = [
+  { value: "clicks", label: "Clicks" },
+  { value: "impressions", label: "Impr." },
+  { value: "ctr", label: "CTR" },
+  { value: "position", label: "Position" },
+];
+
+type Settings = {
+  positionFormat?: GscTrackerPositionFormat;
+  explorerSort?: GscTrackerSortKey;
+};
+
 /** Project-wide display settings for the tracker. */
 function TrackerSettings({
   projectId,
   positionFormat,
+  explorerSort,
 }: {
   projectId: string;
   positionFormat: GscTrackerPositionFormat;
+  explorerSort: GscTrackerSortKey;
 }) {
   const queryClient = useQueryClient();
   const save = useMutation({
-    mutationFn: (value: GscTrackerPositionFormat) =>
-      setGscTrackerPositionFormat({
-        data: { projectId, positionFormat: value },
-      }),
+    mutationFn: (settings: Settings) =>
+      updateGscTrackerSettings({ data: { projectId, ...settings } }),
     onSuccess: () =>
       void queryClient.invalidateQueries({
         queryKey: ["gscTrackerStatus", projectId],
       }),
   });
+  // Show a choice right away while it saves.
+  const pending = save.isPending ? save.variables : undefined;
   return (
     <Popover>
       <PopoverTrigger
@@ -223,26 +241,41 @@ function TrackerSettings({
         <Settings className="size-3.5" />
         Settings
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
+      <PopoverContent align="end" className="w-80">
         <PopoverHeader>
           <PopoverTitle>Tracker settings</PopoverTitle>
           <PopoverDescription>
             Applies to everyone viewing this project.
           </PopoverDescription>
         </PopoverHeader>
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <span>Position format</span>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span>Position format</span>
+            <SegmentedToggle
+              showLabels
+              value={pending?.positionFormat ?? positionFormat}
+              onChange={(value) => save.mutate({ positionFormat: value })}
+              items={POSITION_FORMATS.map((item) => ({ ...item, icon: null }))}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            7.4 shows Search Console&apos;s average position; 7 rounds it to a
+            whole place.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <div className="text-sm">Query Explorer default sort</div>
           <SegmentedToggle
             showLabels
-            value={save.variables ?? positionFormat}
-            onChange={(value) => save.mutate(value)}
-            items={POSITION_FORMATS.map((item) => ({ ...item, icon: null }))}
+            value={pending?.explorerSort ?? explorerSort}
+            onChange={(value) => save.mutate({ explorerSort: value })}
+            items={SORT_KEYS.map((item) => ({ ...item, icon: null }))}
           />
+          <p className="text-xs text-muted-foreground">
+            How the &ldquo;All&rdquo; view opens: most clicks, impressions or
+            CTR first, or best position first. Column headers still re-sort.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          7.4 shows Search Console&apos;s average position; 7 rounds it to a
-          whole place.
-        </p>
       </PopoverContent>
     </Popover>
   );

@@ -8,6 +8,7 @@ import { requireProjectContext } from "@/serverFunctions/middleware";
 import {
   GSC_TRACKER_POSITION_FORMATS,
   GSC_TRACKER_RANGE_DAYS,
+  GSC_TRACKER_SORT_KEYS,
 } from "@/shared/gsc-tracker";
 
 const projectSchema = z.object({ projectId: z.string().min(1) });
@@ -34,8 +35,9 @@ const addKeywordsSchema = projectSchema.extend({
     .max(1000),
 });
 const keywordSchema = projectSchema.extend({ id: z.string().min(1) });
-const formatSchema = projectSchema.extend({
-  positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS),
+const settingsSchema = projectSchema.extend({
+  positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
+  explorerSort: z.enum(GSC_TRACKER_SORT_KEYS).optional(),
 });
 
 export const getGscTrackerStatus = createServerFn({ method: "POST" })
@@ -138,16 +140,16 @@ export const removeGscTrackerKeyword = createServerFn({ method: "POST" })
     return { removed: true as const };
   });
 
-export const setGscTrackerPositionFormat = createServerFn({ method: "POST" })
+export const updateGscTrackerSettings = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
-  .validator(formatSchema)
+  .validator(settingsSchema)
   .handler(async ({ data, context }) => {
     requireOrgPermission(context, { integration: ["manage"] });
-    await GscTrackerService.setPositionFormat(
-      context.projectId,
-      data.positionFormat,
-    );
-    return { positionFormat: data.positionFormat };
+    await GscTrackerService.updateSettings(context.projectId, {
+      positionFormat: data.positionFormat,
+      explorerSort: data.explorerSort,
+    });
+    return { updated: true as const };
   });
 
 export const listGscTrackerTargets = createServerFn({ method: "POST" })

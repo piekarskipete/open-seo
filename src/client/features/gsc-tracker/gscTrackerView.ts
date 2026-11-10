@@ -2,7 +2,10 @@
 // components so the component modules only export components.
 
 import { createContext, useContext } from "react";
-import type { GscTrackerPositionFormat } from "@/shared/gsc-tracker";
+import type {
+  GscTrackerPositionFormat,
+  GscTrackerSortKey,
+} from "@/shared/gsc-tracker";
 
 export type Metrics = {
   clicks: number;
@@ -139,4 +142,35 @@ export function shiftDay(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+export type SortState = { key: GscTrackerSortKey; dir: "asc" | "desc" };
+
+/** The natural first order: most clicks, impressions or CTR, best position. */
+export function defaultSort(key: GscTrackerSortKey): SortState {
+  return { key, dir: key === "position" ? "asc" : "desc" };
+}
+
+/** Clicking the active column flips it; another column starts natural. */
+export function nextSort(
+  current: SortState | null,
+  key: GscTrackerSortKey,
+): SortState {
+  if (current?.key === key)
+    return { key, dir: current.dir === "asc" ? "desc" : "asc" };
+  return defaultSort(key);
+}
+
+/** Rows ordered by the current period's value; rows without one go last. */
+export function sortRows(rows: CompareRow[], sort: SortState): CompareRow[] {
+  const sign = sort.dir === "asc" ? 1 : -1;
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    const left = a.current[sort.key];
+    const right = b.current[sort.key];
+    if (left === null || right === null)
+      return (left === null ? 1 : 0) - (right === null ? 1 : 0);
+    return (left - right) * sign;
+  });
+  return sorted;
 }

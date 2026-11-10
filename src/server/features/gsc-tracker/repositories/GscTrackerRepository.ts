@@ -79,6 +79,7 @@ async function update(
       | "lastSyncedAt"
       | "lastError"
       | "positionFormat"
+      | "explorerSort"
     >
   >,
 ): Promise<void> {

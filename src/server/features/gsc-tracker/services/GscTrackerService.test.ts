@@ -66,6 +66,7 @@ beforeAll(async () => {
   for (const file of [
     "drizzle/sqlite/0069_gsc_tracker.sql",
     "drizzle/sqlite/0071_gsc_tracker_keywords.sql",
+    "drizzle/sqlite/0072_gsc_tracker_explorer_sort.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),

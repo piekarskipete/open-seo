@@ -33,6 +33,7 @@ import {
 import {
   GSC_TRACKER_TABS,
   type GscTrackerRangeDays,
+  type GscTrackerSortKey,
   type GscTrackerTab,
 } from "@/shared/gsc-tracker";
 
@@ -120,6 +121,7 @@ export function GscTrackerPage({
                 <TrackerReport
                   projectId={projectId}
                   canManage={status.data.canManage}
+                  explorerSort={status.data.explorerSort}
                   history={{
                     oldestDate: status.data.oldestDate,
                     newestDate: status.data.newestDate,
@@ -147,6 +149,7 @@ export function GscTrackerPage({
 function TrackerReport({
   projectId,
   canManage,
+  explorerSort,
   history,
   tab,
   days,
@@ -154,6 +157,7 @@ function TrackerReport({
 }: {
   projectId: string;
   canManage: boolean;
+  explorerSort: GscTrackerSortKey;
   /** The stored history, to flag periods that reach past it. */
   history: { oldestDate: string | null; newestDate: string; progress: number };
   tab: GscTrackerTab;
@@ -211,6 +215,7 @@ function TrackerReport({
         <ExplorerTab
           projectId={projectId}
           days={days}
+          defaultSortKey={explorerSort}
           onSelect={setSelectedQuery}
         />
       )}
