@@ -36,6 +36,8 @@ export const gscTrackerProjects = pgTable(
     // Query Explorer's default order: "clicks", "impressions", "ctr" or
     // "position".
     explorerSort: text("explorer_sort").notNull().default("clicks"),
+    // How day labels read: "dd.mm" (03.10) or "mon-d" (Oct 3).
+    dateFormat: text("date_format").notNull().default("dd.mm"),
     createdAt: text("created_at").notNull().default(isoNow),
     updatedAt: text("updated_at").notNull().default(isoNow),
   },

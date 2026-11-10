@@ -17,7 +17,9 @@ import {
 import { Skeleton } from "@/client/components/ui/skeleton";
 import {
   formatMetric,
+  formatDayLabel,
   formatPosition,
+  useDateFormat,
   usePositionFormat,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { AddPhrasesDialog } from "@/client/features/gsc-tracker/GscTrackerAddPhrases";
@@ -94,11 +96,10 @@ export function KeywordsTab({
       <p className="text-xs text-muted-foreground">
         Clicks, impressions, CTR and average position are the month&apos;s
         totals for the target URL. Open a phrase to see its position on each day
-        of the month (each day fetched from Search Console on its own) and every
-        page of yours that showed for it. Green days moved up since the day
-        before and red days moved down, stronger the bigger the move; an
-        outlined day means another page got more clicks or impressions than the
-        target.
+        of the month (each day fetched from Search Console on its own) and any
+        page of yours that beat it. Green days moved up since the day before and
+        red days moved down, stronger the bigger the move; an outlined day means
+        another page got more clicks or impressions than the target.
       </p>
       {result.isPending ? (
         <Skeleton className="h-64 w-full" />
@@ -275,11 +276,6 @@ function moveTone(move: number): string {
   return move > 0 ? UP_TONES[level] : DOWN_TONES[level];
 }
 
-/** "2026-10-05" as "05.10". */
-function dayMonth(day: string): string {
-  return `${day.slice(8, 10)}.${day.slice(5, 7)}`;
-}
-
 /**
  * One cell per day of the month with that day's position only, all on one
  * line: the cells share the width, so a whole month fits without scrolling.
@@ -294,6 +290,7 @@ function DayGrid({
   outranked?: Set<string>;
 }) {
   const positionFormat = usePositionFormat();
+  const dateFormat = useDateFormat();
   return (
     <div
       className="grid gap-0.5"
@@ -323,7 +320,7 @@ function DayGrid({
             )}
           >
             <div className="truncate text-[9px] leading-tight text-muted-foreground">
-              {dayMonth(day)}
+              {formatDayLabel(day, dateFormat)}
             </div>
             <div className="truncate text-[11px] leading-tight">
               {today === undefined ? (
@@ -352,8 +349,9 @@ function KeywordDetail({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
-  const monthValues = useMonthValues();
   const outranked = new Set(keyword.outrankedDays);
+  const target = keyword.pages.find((page) => page.isTarget);
+  const stronger = keyword.pages.filter((page) => page.stronger);
   const remove = useMutation({
     mutationFn: () =>
       removeGscTrackerKeyword({ data: { projectId, id: keyword.id } }),
@@ -364,36 +362,27 @@ function KeywordDetail({
       });
     },
   });
+  // Daily positions are for the followed URL only; pages that beat it are
+  // named, nothing more.
   return (
-    <div className="space-y-4 bg-muted/30 px-3 py-3 sm:pl-8">
-      {keyword.pages.length === 0 ? (
+    <div className="space-y-3 bg-muted/30 px-3 py-3 sm:pl-8">
+      {target ? (
+        <DayGrid page={target} days={days} outranked={outranked} />
+      ) : (
         <p className="text-xs text-muted-foreground">
-          No page of yours showed for this phrase in this month.
+          The target URL didn&apos;t show for this phrase in this month.
         </p>
+      )}
+      {stronger.length > 0 ? (
+        <ul className="space-y-1 text-xs">
+          {stronger.map((page) => (
+            <li key={page.url} className="flex flex-wrap items-center gap-2">
+              <Badge variant="warning">Stronger URL</Badge>
+              <span className="min-w-0 break-all">{page.url}</span>
+            </li>
+          ))}
+        </ul>
       ) : null}
-      {keyword.pages.map((page) => (
-        <div key={page.url} className="space-y-1.5">
-          {/* The target's URL and totals are already on the phrase row. */}
-          {page.isTarget ? null : (
-            <div className="flex items-start gap-4 text-xs">
-              <span className="min-w-0 flex-1 break-all">
-                {page.url}
-                {page.stronger ? (
-                  <Badge variant="warning" className="ml-2">
-                    Stronger than target
-                  </Badge>
-                ) : null}
-              </span>
-              <MetricColumns values={monthValues(page)} />
-            </div>
-          )}
-          <DayGrid
-            page={page}
-            days={days}
-            outranked={page.isTarget ? outranked : undefined}
-          />
-        </div>
-      ))}
       {canManage ? (
         <Button
           variant="ghost"

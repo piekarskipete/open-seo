@@ -9,6 +9,7 @@ import {
   GSC_TRACKER_POSITION_FORMATS,
   GSC_TRACKER_RANGE_DAYS,
   GSC_TRACKER_SORT_KEYS,
+  GSC_TRACKER_DATE_FORMATS,
 } from "@/shared/gsc-tracker";
 
 const projectSchema = z.object({ projectId: z.string().min(1) });
@@ -38,6 +39,7 @@ const keywordSchema = projectSchema.extend({ id: z.string().min(1) });
 const settingsSchema = projectSchema.extend({
   positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
   explorerSort: z.enum(GSC_TRACKER_SORT_KEYS).optional(),
+  dateFormat: z.enum(GSC_TRACKER_DATE_FORMATS).optional(),
 });
 
 export const getGscTrackerStatus = createServerFn({ method: "POST" })
@@ -148,6 +150,7 @@ export const updateGscTrackerSettings = createServerFn({ method: "POST" })
     await GscTrackerService.updateSettings(context.projectId, {
       positionFormat: data.positionFormat,
       explorerSort: data.explorerSort,
+      dateFormat: data.dateFormat,
     });
     return { updated: true as const };
   });

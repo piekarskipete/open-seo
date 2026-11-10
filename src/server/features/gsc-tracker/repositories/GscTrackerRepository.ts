@@ -80,6 +80,7 @@ async function update(
       | "lastError"
       | "positionFormat"
       | "explorerSort"
+      | "dateFormat"
     >
   >,
 ): Promise<void> {
