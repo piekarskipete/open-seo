@@ -11,7 +11,7 @@ import {
   shiftDay,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
-import { RankLinkSettings } from "@/client/features/gsc-tracker/GscTrackerRankCompare";
+import { RankLinkSettings } from "@/client/features/gsc-tracker/GscTrackerRankSettings";
 import {
   Popover,
   PopoverContent,
