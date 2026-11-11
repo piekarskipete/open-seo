@@ -189,26 +189,6 @@ async function markDelivery(
     .where(inArray(gscTrackerAlertEvents.id, ids));
 }
 
-/** Whether the webhook got a summary with alerts on the given day. */
-async function summarySentOn(webhookId: string, day: string) {
-  const [row] = await db
-    .select({ id: gscTrackerAlertEvents.id })
-    .from(gscTrackerAlertEvents)
-    .innerJoin(
-      gscTrackerAlertRules,
-      eq(gscTrackerAlertRules.id, gscTrackerAlertEvents.ruleId),
-    )
-    .where(
-      and(
-        eq(gscTrackerAlertRules.webhookId, webhookId),
-        eq(gscTrackerAlertEvents.status, "sent"),
-        sql`substr(${gscTrackerAlertEvents.sentAt}, 1, 10) = ${day}`,
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
-}
-
 /** The site's latest alerts, newest first. */
 async function history(siteId: string, limit: number) {
   return db
@@ -263,7 +243,6 @@ export const GscTrackerAlertRepository = {
   addEvent,
   undelivered,
   markDelivery,
-  summarySentOn,
   history,
   clearSite,
 };
