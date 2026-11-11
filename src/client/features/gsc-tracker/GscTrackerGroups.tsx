@@ -48,7 +48,7 @@ import {
 import type { GscTrackerRangeDays } from "@/shared/gsc-tracker";
 
 /**
- * Page groups: sets of URLs (hand-picked, a sitemap, a directory or a regex)
+ * Page groups: sets of URLs (a custom list, a sitemap, a directory or a regex)
  * with their totals for the period, and every page of the site below. A
  * group opens with its own totals, daily chart and URLs.
  */
