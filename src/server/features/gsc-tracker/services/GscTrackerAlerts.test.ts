@@ -216,9 +216,14 @@ it("raises each alert once, signed, and retries a failed digest", async () => {
   answer = 500;
   expect(await alerts.runSiteAlerts("s1", { now, force: true })).toBe(4);
   expect(posts).toHaveLength(1);
-  const discord = JSON.parse(posts[0]?.body ?? "{}") as { content: string };
+  const discord = JSON.parse(posts[0]?.body ?? "{}") as {
+    content: string;
+    flags: number;
+  };
   expect(discord.content).toContain("**Phrase dropped (1)**");
-  expect(discord.content).toContain("• shoes: 3 → 15 (−12) · https://x/a");
+  // No link previews: off-site URLs in <…>, and the embeds flag set.
+  expect(discord.content).toContain("• shoes: 3 → 15 (−12) · <https://x/a>");
+  expect(discord.flags).toBe(4);
   let state = await alerts.getAlerts(site);
   expect(state.history.every((event) => event.status === "failed")).toBe(true);
   expect(state.webhooks[0]).toMatchObject({
@@ -230,6 +235,19 @@ it("raises each alert once, signed, and retries a failed digest", async () => {
   await alerts.runSiteAlerts("s1", { now });
   state = await alerts.getAlerts(site);
   expect(state.history.every((event) => event.status === "sent")).toBe(true);
+
+  // Today's summary went out, so a later alert waits for tomorrow's,
+  // unless Check now forces it.
+  await client.execute(`
+    INSERT INTO gsc_tracker_alert_events (rule_id, site_id, subject, date, title, message, data)
+    SELECT id, 's1', 'later', '2026-11-08', 'Later', 'Later', '{"line":"later"}'
+    FROM gsc_tracker_alert_rules LIMIT 1
+  `);
+  posts.length = 0;
+  await alerts.runSiteAlerts("s1", { now: new Date() });
+  expect(posts).toHaveLength(0);
+  await alerts.runSiteAlerts("s1", { now: new Date(), force: true });
+  expect(posts).toHaveLength(1);
 });
 
 it("checks a rule's thresholds and scope", async () => {
