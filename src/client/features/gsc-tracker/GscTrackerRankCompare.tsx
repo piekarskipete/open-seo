@@ -14,7 +14,8 @@ import {
 } from "@/client/components/ui/select";
 import { TableBulkActionButton } from "@/client/components/table/TableBulkActionBar";
 import {
-  AGREEMENT_TONES,
+  AGREEMENT_STYLES,
+  placesApart,
   compareDay,
   summarizeRank,
   useRank,
@@ -104,22 +105,27 @@ export function RankBadge({ keyword }: { keyword: Keyword }) {
     <Badge
       variant={
         summary.verdict === "agrees"
-          ? "success"
+          ? "info"
           : summary.verdict === "differs"
-            ? "destructive"
+            ? "warning"
             : "secondary"
       }
       title={
         summary.compared === 0
           ? "No day with both Search Console and Rank Tracking positions this month."
-          : `${summary.agreeing} of ${summary.compared} days agree within 10 places${summary.otherUrl ? `. Rank Tracking found ${summary.otherUrl}` : ""}`
+          : `${summary.agreeing} of ${summary.compared} days within 10 places of Search Console${summary.otherUrl ? `. Rank Tracking found ${summary.otherUrl}` : ""}`
       }
     >
+      {summary.verdict === "agrees"
+        ? "✓ "
+        : summary.verdict === "differs"
+          ? "! "
+          : ""}
       Rank Tracking {position}
       {summary.verdict === "agrees"
-        ? " · agrees"
+        ? " · matches GSC"
         : summary.verdict === "differs"
-          ? " · differs"
+          ? " · differs from GSC"
           : ""}
     </Badge>
   );
@@ -174,11 +180,15 @@ export function RankDetail({
   });
   return (
     <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">
-        Rank Tracking · {data.link.domain} · {data.link.device}
-        {summary.compared > 0
-          ? ` · ${summary.agreeing} of ${summary.compared} days agree with Search Console`
-          : " · no day measured by both yet"}
+      <p className="text-xs">
+        <span className="font-medium">Rank Tracking</span>
+        <span className="text-muted-foreground">
+          {" "}
+          · one Google check a day, {data.link.device}, {data.link.domain}
+          {summary.compared > 0
+            ? ` · ${summary.agreeing} of ${summary.compared} days match Search Console`
+            : " · no day measured by both yet"}
+        </span>
       </p>
       <div
         className="grid gap-0.5"
@@ -188,24 +198,49 @@ export function RankDetail({
       >
         {days.map((day) => {
           const rankDay = entry.days[day];
-          const verdict = compareDay(gscDays[day]?.position, rankDay);
+          const gsc = gscDays[day]?.position;
+          const verdict = compareDay(gsc, rankDay);
+          const style = verdict ? AGREEMENT_STYLES[verdict] : null;
+          const otherPage = Boolean(
+            rankDay?.url &&
+            comparableUrl(rankDay.url) !== comparableUrl(keyword.targetUrl),
+          );
+          const tip = rankDay
+            ? [
+                rankDay.position === null
+                  ? "Rank Tracking: not found"
+                  : `Rank Tracking: ${rankDay.position}`,
+                gsc === undefined
+                  ? "Search Console: no data"
+                  : `Search Console: ${gsc.toFixed(1)}`,
+                style?.label,
+                otherPage ? `Ranked: ${rankDay.url}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : "Not checked this day";
+          const mark =
+            !style || !verdict
+              ? ""
+              : verdict === "match" ||
+                  gsc === undefined ||
+                  !rankDay ||
+                  rankDay.position === null
+                ? style.symbol
+                : placesApart(gsc, rankDay.position);
           return (
             <div
               key={day}
-              title={
-                rankDay
-                  ? `${rankDay.position === null ? "Not found" : `Position ${rankDay.position}`}${rankDay.url ? ` · ${rankDay.url}` : ""}${verdict ? ` · ${verdict === "match" ? "agrees" : verdict === "close" ? "close" : "differs"} with Search Console` : ""}`
-                  : "Not checked this day"
-              }
+              title={tip}
               className={cn(
                 "min-w-0 overflow-hidden rounded border py-0.5 text-center tabular-nums",
-                verdict ? AGREEMENT_TONES[verdict] : "border-dashed bg-card",
+                style ? style.cell : "border-dashed bg-card",
               )}
             >
               <div className="truncate text-[9px] leading-tight text-muted-foreground">
                 {formatDayLabel(day, dateFormat)}
               </div>
-              <div className="truncate text-[11px] leading-tight">
+              <div className="truncate text-[11px] leading-tight font-medium">
                 {rankDay === undefined ? (
                   <span className="text-muted-foreground">·</span>
                 ) : rankDay.position === null ? (
@@ -213,35 +248,46 @@ export function RankDetail({
                 ) : (
                   <>
                     {rankDay.position}
-                    {rankDay.url &&
-                    comparableUrl(rankDay.url) !==
-                      comparableUrl(keyword.targetUrl) ? (
-                      <span className="text-warning">*</span>
+                    {otherPage ? (
+                      <span className="text-orange-600 dark:text-orange-400">
+                        *
+                      </span>
                     ) : null}
                   </>
                 )}
+              </div>
+              <div
+                className={cn(
+                  "h-3 truncate text-[9px] leading-tight font-semibold",
+                  style?.mark,
+                )}
+              >
+                {mark}
               </div>
             </div>
           );
         })}
       </div>
-      <p className="flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
-        <span>
-          <span className="mr-1 inline-block size-2 rounded-sm bg-success/40" />
-          within 3 places
-        </span>
-        <span>
-          <span className="mr-1 inline-block size-2 rounded-sm bg-warning/40" />
-          within 10
-        </span>
-        <span>
-          <span className="mr-1 inline-block size-2 rounded-sm bg-destructive/40" />
-          further apart or not found
-        </span>
-        <span>
-          <span className="text-warning">*</span> another URL ranked
-        </span>
-      </p>
+      <ul className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
+        {(["match", "close", "differs"] as const).map((key) => (
+          <li key={key}>
+            <span className={cn("font-semibold", AGREEMENT_STYLES[key].mark)}>
+              {AGREEMENT_STYLES[key].symbol}
+            </span>{" "}
+            {AGREEMENT_STYLES[key].label}
+          </li>
+        ))}
+        <li>
+          <span className="font-semibold">+5</span> Rank Tracking 5 places lower
+          than Search Console
+        </li>
+        <li>
+          <span className="font-semibold text-orange-600 dark:text-orange-400">
+            *
+          </span>{" "}
+          Another page of yours ranked
+        </li>
+      </ul>
       {summary.otherUrl ? (
         <p className="text-xs">
           <Badge variant="warning">Other URL</Badge>{" "}
