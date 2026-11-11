@@ -139,6 +139,8 @@ async function update(
       | "pagesSyncedAt"
       | "overviewLayout"
       | "cannibalExclusions"
+      | "rankConfigId"
+      | "rankDevice"
     >
   >,
 ): Promise<void> {

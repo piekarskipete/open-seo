@@ -9,6 +9,7 @@ import {
   CheckpointsButton,
   StartDateButton,
 } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
+import { RankDetail } from "@/client/features/gsc-tracker/GscTrackerRankCompare";
 import {
   formatDayLabel,
   formatPosition,
@@ -143,6 +144,7 @@ export function KeywordDetail({
           The target URL didn&apos;t show for this phrase in this month.
         </p>
       )}
+      <RankDetail keyword={keyword} days={days} canManage={canManage} />
       {stronger.length > 0 ? (
         <ul className="space-y-1 text-xs">
           {stronger.map((page) => (
