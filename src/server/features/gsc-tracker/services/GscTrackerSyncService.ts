@@ -8,6 +8,7 @@ import { isStale, planSyncDays, syncErrorMessage } from "./gscTrackerPlan";
 import { syncKeywords } from "./gscTrackerKeywordSync";
 import { isPageHistoryDue, syncPageDays } from "./gscTrackerPageSync";
 import { refreshSiteGroups } from "./gscTrackerGroupRules";
+import { GscTrackerAlertService } from "./GscTrackerAlertService";
 import { describeError } from "@/server/lib/errors";
 
 // Days fetched per site per tick: one Search Console call each, plus one
@@ -143,6 +144,8 @@ export async function syncPagesAndGroups(siteId: string, now = new Date()) {
   if (!site) return;
   if (isPageHistoryDue(site, now)) await syncPageDays(site, now);
   await refreshSiteGroups(site, now);
+  // Alerts read what the sync just stored.
+  await GscTrackerAlertService.runSiteAlerts(siteId, { now });
 }
 
 /** Cron body: one batch for every tracker with work left. */
