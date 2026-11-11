@@ -84,3 +84,106 @@ export const GSC_TRACKER_URL_FILTER_MODES = [
 
 export type GscTrackerUrlFilterMode =
   (typeof GSC_TRACKER_URL_FILTER_MODES)[number];
+
+/** Widgets the Overview tab can show. "keywords" can be narrowed to a tag,
+ *  "group" names a page group. */
+export const GSC_TRACKER_WIDGET_TYPES = [
+  "totals",
+  "keywords",
+  "queries",
+  "pages",
+  "group",
+  "cannibalization",
+] as const;
+
+export type GscTrackerWidgetType = (typeof GSC_TRACKER_WIDGET_TYPES)[number];
+
+export type GscTrackerWidget = {
+  id: string;
+  type: GscTrackerWidgetType;
+  /** "half" shares a row with another half widget. */
+  size: "half" | "full";
+  tagId?: string;
+  groupId?: string;
+};
+
+/** The most widgets one Overview holds. */
+export const GSC_TRACKER_MAX_WIDGETS = 24;
+
+/** The Overview a site starts with. */
+export const DEFAULT_GSC_TRACKER_WIDGETS: GscTrackerWidget[] = [
+  { id: "totals", type: "totals", size: "full" },
+  { id: "keywords", type: "keywords", size: "half" },
+  { id: "queries", type: "queries", size: "half" },
+  { id: "pages", type: "pages", size: "half" },
+  { id: "cannibalization", type: "cannibalization", size: "half" },
+];
+
+/** A stored layout, or the default when it is missing or unreadable. */
+export function parseOverviewLayout(raw: string | null): GscTrackerWidget[] {
+  if (!raw) return DEFAULT_GSC_TRACKER_WIDGETS;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return DEFAULT_GSC_TRACKER_WIDGETS;
+    return parsed.flatMap((item: unknown): GscTrackerWidget[] => {
+      if (!item || typeof item !== "object") return [];
+      const entry = item as Record<string, unknown>;
+      const type = GSC_TRACKER_WIDGET_TYPES.find(
+        (value) => value === entry.type,
+      );
+      if (!type || typeof entry.id !== "string") return [];
+      return [
+        {
+          id: entry.id,
+          type,
+          size: entry.size === "full" ? "full" : "half",
+          ...(typeof entry.tagId === "string" ? { tagId: entry.tagId } : {}),
+          ...(typeof entry.groupId === "string"
+            ? { groupId: entry.groupId }
+            : {}),
+        },
+      ];
+    });
+  } catch {
+    return DEFAULT_GSC_TRACKER_WIDGETS;
+  }
+}
+
+/** A URL rule Cannibalization leaves out: text the URL contains (such as
+ *  "?fbclid=") or a regular expression. Inactive rules are kept, unapplied. */
+export type GscTrackerExclusion = {
+  id: string;
+  mode: "contains" | "regex";
+  pattern: string;
+  active: boolean;
+};
+
+/** The most exclusions one site keeps. */
+export const GSC_TRACKER_MAX_EXCLUSIONS = 50;
+
+/** Stored exclusions; none when missing or unreadable. */
+export function parseCannibalExclusions(
+  raw: string | null,
+): GscTrackerExclusion[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item: unknown): GscTrackerExclusion[] => {
+      if (!item || typeof item !== "object") return [];
+      const entry = item as Record<string, unknown>;
+      if (typeof entry.id !== "string" || typeof entry.pattern !== "string")
+        return [];
+      return [
+        {
+          id: entry.id,
+          mode: entry.mode === "regex" ? "regex" : "contains",
+          pattern: entry.pattern,
+          active: entry.active !== false,
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}

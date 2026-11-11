@@ -3,6 +3,7 @@ import { z } from "zod";
 import { hasOrgPermission } from "@/lib/org-permissions";
 import { requireOrgPermission } from "@/server/auth/org-gate";
 import { GscTrackerService } from "@/server/features/gsc-tracker/services/GscTrackerService";
+import { GscTrackerCannibalization } from "@/server/features/gsc-tracker/services/gscTrackerCannibalization";
 import { GscTrackerKeywordService } from "@/server/features/gsc-tracker/services/GscTrackerKeywordService";
 import { getKeywordChart } from "@/server/features/gsc-tracker/services/gscTrackerKeywordChart";
 import { trackQueries } from "@/server/features/gsc-tracker/services/gscTrackerTrackQueries";
@@ -13,6 +14,9 @@ import {
   GSC_TRACKER_SORT_KEYS,
   GSC_TRACKER_DATE_FORMATS,
   GSC_TRACKER_CHART_DAYS,
+  GSC_TRACKER_MAX_EXCLUSIONS,
+  GSC_TRACKER_MAX_WIDGETS,
+  GSC_TRACKER_WIDGET_TYPES,
 } from "@/shared/gsc-tracker";
 
 // Every call but the site list and adding a site names one tracked site of
@@ -92,6 +96,33 @@ const settingsSchema = siteSchema.extend({
   positionFormat: z.enum(GSC_TRACKER_POSITION_FORMATS).optional(),
   explorerSort: z.enum(GSC_TRACKER_SORT_KEYS).optional(),
   dateFormat: z.enum(GSC_TRACKER_DATE_FORMATS).optional(),
+});
+
+const layoutSchema = siteSchema.extend({
+  widgets: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(100),
+        type: z.enum(GSC_TRACKER_WIDGET_TYPES),
+        size: z.enum(["half", "full"]),
+        tagId: z.string().min(1).max(100).optional(),
+        groupId: z.string().min(1).max(100).optional(),
+      }),
+    )
+    .max(GSC_TRACKER_MAX_WIDGETS),
+});
+
+const exclusionsSchema = siteSchema.extend({
+  exclusions: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(100),
+        mode: z.enum(["contains", "regex"]),
+        pattern: z.string().trim().min(1).max(500),
+        active: z.boolean(),
+      }),
+    )
+    .max(GSC_TRACKER_MAX_EXCLUSIONS),
 });
 
 type Role = Parameters<typeof hasOrgPermission>[0];
@@ -210,13 +241,16 @@ export const getGscTrackerQuery = createServerFn({ method: "POST" })
 
 export const getGscTrackerCannibalization = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
-  .validator(rangeSchema)
+  .validator(listSchema)
   .handler(async ({ data, context }) => {
     const site = await GscTrackerService.requireSite(
       context.projectId,
       data.siteId,
     );
-    return GscTrackerService.getCannibalization(site.id, data.days);
+    return GscTrackerCannibalization.getCannibalization(site, data.days, {
+      search: data.search,
+      page: data.page,
+    });
   });
 
 export const getGscTrackerKeywords = createServerFn({ method: "POST" })
@@ -355,4 +389,34 @@ export const trackGscTrackerQueries = createServerFn({ method: "POST" })
       startDate: data.startDate,
       checkpoints: data.checkpoints,
     });
+  });
+
+/** Saves the Overview tab's widgets and their order. */
+export const saveGscTrackerOverviewLayout = createServerFn({ method: "POST" })
+  .middleware(requireProjectContext)
+  .validator(layoutSchema)
+  .handler(async ({ data, context }) => {
+    requireOrgPermission(context, { integration: ["manage"] });
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    await GscTrackerService.saveOverviewLayout(site, data.widgets);
+    return { saved: true as const };
+  });
+
+/** Replaces the URLs Cannibalization leaves out. */
+export const saveGscTrackerCannibalExclusions = createServerFn({
+  method: "POST",
+})
+  .middleware(requireProjectContext)
+  .validator(exclusionsSchema)
+  .handler(async ({ data, context }) => {
+    requireOrgPermission(context, { integration: ["manage"] });
+    const site = await GscTrackerService.requireSite(
+      context.projectId,
+      data.siteId,
+    );
+    await GscTrackerCannibalization.saveExclusions(site, data.exclusions);
+    return { saved: true as const };
   });

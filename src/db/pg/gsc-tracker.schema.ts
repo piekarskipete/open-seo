@@ -51,6 +51,11 @@ export const gscTrackerSites = pgTable(
     positionFormat: text("position_format").notNull().default("decimal"),
     explorerSort: text("explorer_sort").notNull().default("clicks"),
     dateFormat: text("date_format").notNull().default("dd.mm"),
+    // The Overview tab's widgets as JSON (GscTrackerWidget[]); null: the
+    // default layout.
+    overviewLayout: text("overview_layout"),
+    // URLs Cannibalization leaves out, as JSON (GscTrackerExclusion[]).
+    cannibalExclusions: text("cannibal_exclusions"),
     createdAt: text("created_at").notNull().default(isoNow),
     updatedAt: text("updated_at").notNull().default(isoNow),
   },

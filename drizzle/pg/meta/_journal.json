@@ -407,6 +407,13 @@
       "when": 1794360711201,
       "tag": "0057_gsc_tracker_url_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1794388982422,
+      "tag": "0058_gsc_tracker_overview_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import type { runBatch } from "@/db/runBatch";
 import type * as ServiceModule from "./GscTrackerService";
 import type * as SiteModule from "../repositories/GscTrackerRepository";
 import type * as KeywordModule from "./GscTrackerKeywordService";
+import type * as CannibalModule from "./gscTrackerCannibalization";
 
 type Row = {
   keys: string[];
@@ -46,6 +47,7 @@ vi.mock("@/server/features/google/googleAccess", () => ({
 let client: Client;
 const directory = mkdtempSync(join(tmpdir(), "gsc-tracker-"));
 let service: typeof ServiceModule.GscTrackerService;
+let cannibalization: typeof CannibalModule.GscTrackerCannibalization;
 let sites: typeof SiteModule.GscTrackerRepository;
 let keywords: typeof KeywordModule.GscTrackerKeywordService;
 type Build = Parameters<typeof runBatch>[0];
@@ -87,11 +89,14 @@ beforeAll(async () => {
     "drizzle/sqlite/0077_gsc_tracker_sites.sql",
     "drizzle/sqlite/0078_gsc_tracker_drop_projects.sql",
     "drizzle/sqlite/0079_gsc_tracker_url_groups.sql",
+    "drizzle/sqlite/0080_gsc_tracker_overview_settings.sql",
   ])
     await client.executeMultiple(
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
     );
   ({ GscTrackerService: service } = await import("./GscTrackerService"));
+  ({ GscTrackerCannibalization: cannibalization } =
+    await import("./gscTrackerCannibalization"));
   ({ GscTrackerRepository: sites } =
     await import("../repositories/GscTrackerRepository"));
   ({ GscTrackerKeywordService: keywords } =
@@ -261,12 +266,43 @@ it("stores synced days and compares the current window with the previous one", a
     // Totals come from Search Console's own totals, not summed rows.
     expect(overview?.current.clicks).toBe((7 + 1) * 4 + (4 + 1) * 2);
 
-    const cannibal = await service.getCannibalization("p1", 7);
+    const site = await sites.get("p1");
+    if (!site) throw new Error("no site");
+    const cannibal = await cannibalization.getCannibalization(site, 7);
     expect(cannibal?.queries.map((query) => query.query)).toEqual(["shoes"]);
     expect(cannibal?.queries[0]?.pages.map((page) => page.url)).toEqual([
       "https://x/a",
       "https://x/b",
     ]);
+    // An excluded URL doesn't count, so the query isn't split any more.
+    const rule = {
+      id: "e1",
+      mode: "contains" as const,
+      pattern: "/b",
+      active: true,
+    };
+    await cannibalization.saveExclusions(site, [rule]);
+    const excluded = await cannibalization.getCannibalization(
+      (await sites.get("p1")) ?? site,
+      7,
+    );
+    expect(excluded?.queries).toEqual([]);
+    expect(excluded?.exclusions).toEqual([rule]);
+    // Turned off, it no longer applies.
+    await cannibalization.saveExclusions(site, [{ ...rule, active: false }]);
+    expect(
+      (
+        await cannibalization.getCannibalization(
+          (await sites.get("p1")) ?? site,
+          7,
+        )
+      )?.queries.map((query) => query.query),
+    ).toEqual(["shoes"]);
+    await expect(
+      cannibalization.saveExclusions(site, [
+        { ...rule, mode: "regex", pattern: "(" },
+      ]),
+    ).rejects.toThrow("regular expression");
   } finally {
     vi.useRealTimers();
   }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/client/components/EmptyState";
 import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
@@ -10,32 +10,24 @@ import {
   HistoryNotice,
   TrackerStatus,
 } from "@/client/features/gsc-tracker/GscTrackerSetup";
-import { CannibalizationList } from "@/client/features/gsc-tracker/GscTrackerCannibalization";
-import {
-  QueryDetailDialog,
-  StatTiles,
-  TrendChart,
-} from "@/client/features/gsc-tracker/GscTrackerParts";
+import { CannibalizationTab } from "@/client/features/gsc-tracker/GscTrackerCannibalization";
+import { QueryDetailDialog } from "@/client/features/gsc-tracker/GscTrackerParts";
 import { KeywordsTab } from "@/client/features/gsc-tracker/GscTrackerKeywords";
 import { ExplorerTab } from "@/client/features/gsc-tracker/GscTrackerExplorer";
 import { PageGroupsTab } from "@/client/features/gsc-tracker/GscTrackerGroups";
+import { OverviewBoard } from "@/client/features/gsc-tracker/GscTrackerOverviewBoard";
 import {
   DateFormatContext,
-  formatDay,
   PositionFormatContext,
   SiteContext,
-  useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
-import {
-  getGscTrackerCannibalization,
-  getGscTrackerOverview,
-  getGscTrackerStatus,
-} from "@/serverFunctions/gscTracker";
+import { getGscTrackerStatus } from "@/serverFunctions/gscTracker";
 import {
   GSC_TRACKER_TABS,
   type GscTrackerRangeDays,
   type GscTrackerSortKey,
   type GscTrackerTab,
+  type GscTrackerWidget,
 } from "@/shared/gsc-tracker";
 
 const RANGES: { days: GscTrackerRangeDays; label: string }[] = [
@@ -115,6 +107,7 @@ export function GscTrackerSitePage({
                 projectId={projectId}
                 canManage={status.data.canManage}
                 explorerSort={status.data.explorerSort}
+                overviewLayout={status.data.overviewLayout}
                 history={{
                   oldestDate: status.data.oldestDate,
                   newestDate: status.data.newestDate,
@@ -143,6 +136,7 @@ function TrackerReport({
   projectId,
   canManage,
   explorerSort,
+  overviewLayout,
   history,
   tab,
   days,
@@ -152,6 +146,7 @@ function TrackerReport({
   projectId: string;
   canManage: boolean;
   explorerSort: GscTrackerSortKey;
+  overviewLayout: GscTrackerWidget[];
   /** The stored history, to flag periods that reach past it. */
   history: { oldestDate: string | null; newestDate: string; progress: number };
   tab: GscTrackerTab;
@@ -196,7 +191,13 @@ function TrackerReport({
       {tab === "keywords" ? (
         <KeywordsTab projectId={projectId} canManage={canManage} />
       ) : tab === "overview" ? (
-        <OverviewTab projectId={projectId} days={days} />
+        <OverviewBoard
+          projectId={projectId}
+          days={days}
+          canManage={canManage}
+          layout={overviewLayout}
+          onOpen={(next, group) => onChange({ tab: next, group })}
+        />
       ) : tab === "pages" ? (
         <PageGroupsTab
           projectId={projectId}
@@ -210,6 +211,7 @@ function TrackerReport({
         <CannibalizationTab
           projectId={projectId}
           days={days}
+          canManage={canManage}
           onSelect={setSelectedQuery}
         />
       ) : (
@@ -230,87 +232,6 @@ function TrackerReport({
           onClose={() => setSelectedQuery(null)}
         />
       ) : null}
-    </div>
-  );
-}
-
-function OverviewTab({
-  projectId,
-  days,
-}: {
-  projectId: string;
-  days: GscTrackerRangeDays;
-}) {
-  const siteId = useSiteId();
-  const overview = useQuery({
-    queryKey: ["gscTrackerOverview", siteId, days],
-    queryFn: () => getGscTrackerOverview({ data: { projectId, siteId, days } }),
-    placeholderData: keepPreviousData,
-  });
-  if (overview.isPending) return <Skeleton className="h-80 w-full" />;
-  if (overview.isError)
-    return (
-      <QueryError
-        error={overview.error}
-        fallback="Couldn't load the overview."
-        onRetry={() => void overview.refetch()}
-        isRetrying={overview.isFetching}
-      />
-    );
-  if (!overview.data) return null;
-  return (
-    <div className="space-y-4">
-      <StatTiles
-        current={overview.data.current}
-        previous={overview.data.previous}
-      />
-      <TrendChart series={overview.data.series} />
-      <p className="text-xs text-muted-foreground">
-        {formatDay(overview.data.currentStart)} –{" "}
-        {formatDay(overview.data.currentEnd)}, compared with{" "}
-        {formatDay(overview.data.previousStart)} –{" "}
-        {formatDay(overview.data.previousEnd)}. Totals include anonymized
-        queries.
-      </p>
-    </div>
-  );
-}
-
-function CannibalizationTab({
-  projectId,
-  days,
-  onSelect,
-}: {
-  projectId: string;
-  days: GscTrackerRangeDays;
-  onSelect: (query: string) => void;
-}) {
-  const siteId = useSiteId();
-  const result = useQuery({
-    queryKey: ["gscTrackerCannibalization", siteId, days],
-    queryFn: () =>
-      getGscTrackerCannibalization({ data: { projectId, siteId, days } }),
-    placeholderData: keepPreviousData,
-  });
-  if (result.isPending) return <Skeleton className="h-80 w-full" />;
-  if (result.isError)
-    return (
-      <QueryError
-        error={result.error}
-        fallback="Couldn't check for competing pages."
-        onRetry={() => void result.refetch()}
-        isRetrying={result.isFetching}
-      />
-    );
-  if (!result.data) return null;
-  return (
-    <div className="space-y-2">
-      <p className="text-sm text-muted-foreground">
-        Queries where a second page of yours earns at least 10% of the
-        impressions. Pick one page per query, or give each page a distinct
-        intent.
-      </p>
-      <CannibalizationList queries={result.data.queries} onSelect={onSelect} />
     </div>
   );
 }
