@@ -54,6 +54,11 @@ export const gscTrackerSites = sqliteTable(
     overviewLayout: text("overview_layout"),
     // URLs Cannibalization leaves out, as JSON (GscTrackerExclusion[]).
     cannibalExclusions: text("cannibal_exclusions"),
+    // The Rank Tracking domain (rank_tracking_configs.id) whose positions the
+    // followed phrases are compared with, and the device read from it. No
+    // foreign key: a removed domain just reads as unlinked.
+    rankConfigId: text("rank_config_id"),
+    rankDevice: text("rank_device"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),

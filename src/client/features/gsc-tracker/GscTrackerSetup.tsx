@@ -11,6 +11,7 @@ import {
   shiftDay,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
+import { RankLinkSettings } from "@/client/features/gsc-tracker/GscTrackerRankCompare";
 import {
   Popover,
   PopoverContent,
@@ -244,6 +245,7 @@ function TrackerSettings({
             items={DATE_FORMATS.map((item) => ({ ...item, icon: null }))}
           />
         </div>
+        <RankLinkSettings projectId={projectId} />
         <div className="space-y-1">
           <div className="text-sm">Query Explorer default sort</div>
           <SegmentedToggle

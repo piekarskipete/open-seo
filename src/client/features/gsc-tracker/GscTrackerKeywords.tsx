@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { RankContext } from "@/client/features/gsc-tracker/gscTrackerRank";
+import { getGscTrackerRankComparison } from "@/serverFunctions/gscTrackerOverview";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { EmptyState } from "@/client/components/EmptyState";
@@ -63,6 +65,15 @@ export function KeywordsTab({
       getGscTrackerKeywords({ data: { projectId, siteId, month } }),
   });
   const tags = useTags(projectId, siteId).data ?? [];
+  // Rank Tracking's positions for the same month, when the site links a
+  // Rank Tracking domain.
+  const rank = useQuery({
+    queryKey: ["gscTrackerRank", siteId, result.data?.month ?? month],
+    queryFn: () =>
+      getGscTrackerRankComparison({
+        data: { projectId, siteId, month: result.data?.month ?? month },
+      }),
+  });
   // A deleted tag drops out of the filter.
   const activeFilter = tagFilter.filter((id) =>
     tags.some((tag) => tag.id === id),
@@ -82,108 +93,114 @@ export function KeywordsTab({
     });
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Select
-          value={result.data?.month ?? month}
-          onValueChange={(value) => {
-            if (typeof value === "string") setMonth(value);
-          }}
-        >
-          <SelectTrigger size="sm" className="w-48" aria-label="Month">
-            <SelectValue>
-              {(value: string) => (value ? monthLabel(value) : "Month")}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {(result.data?.months ?? []).map((value) => (
-              <SelectItem key={value} value={value}>
-                {monthLabel(value)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex flex-wrap items-center gap-2">
-          <KeywordTagFilter
-            projectId={projectId}
-            tags={tags}
-            value={activeFilter}
-            onChange={setTagFilter}
-          />
-          {canManage ? (
-            <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus className="size-3.5" />
-              Add phrases
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Clicks, impressions, CTR and average position are the month&apos;s
-        totals for the target URL. Open a phrase to see its position on each day
-        of the month (each day fetched from Search Console on its own) and any
-        page of yours that beat it. Green days moved up since the day before and
-        red days moved down, stronger the bigger the move; an outlined day means
-        another page got more clicks or impressions than the target.
-      </p>
-      {result.isPending ? (
-        <Skeleton className="h-64 w-full" />
-      ) : result.isError ? (
-        <QueryError
-          error={result.error}
-          fallback="Couldn't load the followed phrases."
-          onRetry={() => void result.refetch()}
-          isRetrying={result.isFetching}
-        />
-      ) : result.data.keywords.length === 0 ? (
-        <EmptyState
-          title="No phrases followed yet"
-          description="Add a phrase and the URL that should rank for it to see its position every day."
-        />
-      ) : (
-        <>
-          {visible.length === 0 ? (
-            <EmptyState
-              kind="filtered"
-              title="No phrases with these tags"
-              description="Choose other tags or clear the filter."
-            />
-          ) : (
-            <KeywordTable
+    <RankContext.Provider value={{ projectId, data: rank.data }}>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Select
+            value={result.data?.month ?? month}
+            onValueChange={(value) => {
+              if (typeof value === "string") setMonth(value);
+            }}
+          >
+            <SelectTrigger size="sm" className="w-48" aria-label="Month">
+              <SelectValue>
+                {(value: string) => (value ? monthLabel(value) : "Month")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {(result.data?.months ?? []).map((value) => (
+                <SelectItem key={value} value={value}>
+                  {monthLabel(value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <KeywordTagFilter
               projectId={projectId}
-              data={result.data}
-              keywords={visible}
               tags={tags}
-              expanded={expanded}
-              onToggle={toggle}
-              canManage={canManage}
-              selected={selected}
-              onSelect={setSelected}
+              value={activeFilter}
+              onChange={setTagFilter}
             />
-          )}
-        </>
-      )}
-      {canManage ? (
-        <KeywordBulkBar
-          projectId={projectId}
-          selected={selection.map((keyword) => keyword.id)}
-          tags={tags}
-          selectedTags={tags.filter((tag) =>
-            selection.some((keyword) => keyword.tagIds.includes(tag.id)),
-          )}
-          startDate={selection[0]?.startDate ?? ""}
-          anyCustomStart={selection.some((keyword) => !keyword.startIsDefault)}
-          checkpoints={selection[0]?.checkpoints ?? []}
-          onClear={() => setSelected(new Set())}
-        />
-      ) : null}
-      {adding ? (
-        <AddPhrasesDialog
-          projectId={projectId}
-          onClose={() => setAdding(false)}
-        />
-      ) : null}
-    </div>
+            {canManage ? (
+              <Button size="sm" onClick={() => setAdding(true)}>
+                <Plus className="size-3.5" />
+                Add phrases
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Clicks, impressions, CTR and average position are the month&apos;s
+          totals for the target URL. Open a phrase to see its position on each
+          day of the month (each day fetched from Search Console on its own) and
+          any page of yours that beat it. Green days moved up since the day
+          before and red days moved down, stronger the bigger the move; an
+          outlined day means another page got more clicks or impressions than
+          the target.
+        </p>
+        {result.isPending ? (
+          <Skeleton className="h-64 w-full" />
+        ) : result.isError ? (
+          <QueryError
+            error={result.error}
+            fallback="Couldn't load the followed phrases."
+            onRetry={() => void result.refetch()}
+            isRetrying={result.isFetching}
+          />
+        ) : result.data.keywords.length === 0 ? (
+          <EmptyState
+            title="No phrases followed yet"
+            description="Add a phrase and the URL that should rank for it to see its position every day."
+          />
+        ) : (
+          <>
+            {visible.length === 0 ? (
+              <EmptyState
+                kind="filtered"
+                title="No phrases with these tags"
+                description="Choose other tags or clear the filter."
+              />
+            ) : (
+              <KeywordTable
+                projectId={projectId}
+                data={result.data}
+                keywords={visible}
+                tags={tags}
+                expanded={expanded}
+                onToggle={toggle}
+                canManage={canManage}
+                selected={selected}
+                onSelect={setSelected}
+              />
+            )}
+          </>
+        )}
+        {canManage ? (
+          <KeywordBulkBar
+            projectId={projectId}
+            selected={selection.map((keyword) => keyword.id)}
+            rankKeywords={selection}
+            tags={tags}
+            selectedTags={tags.filter((tag) =>
+              selection.some((keyword) => keyword.tagIds.includes(tag.id)),
+            )}
+            startDate={selection[0]?.startDate ?? ""}
+            anyCustomStart={selection.some(
+              (keyword) => !keyword.startIsDefault,
+            )}
+            checkpoints={selection[0]?.checkpoints ?? []}
+            onClear={() => setSelected(new Set())}
+          />
+        ) : null}
+        {adding ? (
+          <AddPhrasesDialog
+            projectId={projectId}
+            onClose={() => setAdding(false)}
+          />
+        ) : null}
+      </div>
+    </RankContext.Provider>
   );
 }
 

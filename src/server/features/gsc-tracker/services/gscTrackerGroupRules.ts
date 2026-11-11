@@ -65,7 +65,7 @@ function matchesRule(
 }
 
 /** The domain a Search Console property covers, without "www.". */
-function propertyDomain(siteUrl: string): string {
+export function propertyDomain(siteUrl: string): string {
   if (siteUrl.startsWith("sc-domain:"))
     return siteUrl.slice("sc-domain:".length).toLowerCase();
   try {

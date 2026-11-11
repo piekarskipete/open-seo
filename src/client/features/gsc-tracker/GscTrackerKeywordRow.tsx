@@ -12,6 +12,7 @@ import {
   TrendCell,
 } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
 import { KeywordChartDialog } from "@/client/features/gsc-tracker/GscTrackerKeywordChart";
+import { RankBadge } from "@/client/features/gsc-tracker/GscTrackerRankCompare";
 import { TagChip } from "@/client/features/saved-keywords/TagChip";
 import type { Tag } from "@/client/features/gsc-tracker/gscTrackerTags";
 import type { getGscTrackerKeywords } from "@/serverFunctions/gscTracker";
@@ -133,6 +134,7 @@ export function KeywordRow({
                 Competing pages ({keyword.competingPages})
               </Badge>
             ) : null}
+            <RankBadge keyword={keyword} />
             {tags.map((tag) => (
               <TagChip key={tag.id} tag={tag} size="xs" />
             ))}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { RankBulkButton } from "@/client/features/gsc-tracker/GscTrackerRankCompare";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tags } from "lucide-react";
 import { toast } from "sonner";
@@ -96,6 +97,7 @@ export function KeywordBulkBar({
   selected,
   tags,
   selectedTags,
+  rankKeywords,
   startDate,
   anyCustomStart,
   checkpoints,
@@ -104,6 +106,8 @@ export function KeywordBulkBar({
   projectId: string;
   selected: string[];
   tags: Tag[];
+  /** The selected phrases, for adding them to Rank Tracking. */
+  rankKeywords?: Parameters<typeof RankBulkButton>[0]["keywords"];
   /** Tags at least one selected phrase carries. */
   selectedTags: Tag[];
   /** The date the start-date picker opens on. */
@@ -156,6 +160,7 @@ export function KeywordBulkBar({
               initial={checkpoints}
               inBar
             />
+            {rankKeywords ? <RankBulkButton keywords={rankKeywords} /> : null}
           </div>
         }
       />
