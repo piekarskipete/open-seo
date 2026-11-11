@@ -23,7 +23,10 @@ import {
   testGscTrackerWebhook,
   type getGscTrackerAlerts,
 } from "@/serverFunctions/gscTrackerAlerts";
-import type { GscTrackerWebhookFormat } from "@/shared/gsc-tracker-alerts";
+import type {
+  GscTrackerWebhookFormat,
+  GscTrackerWebhookMode,
+} from "@/shared/gsc-tracker-alerts";
 
 type Alerts = Awaited<ReturnType<typeof getGscTrackerAlerts>>;
 type WebhookRow = Alerts["webhooks"][number];
@@ -32,6 +35,10 @@ const FORMATS = [
   { value: "json" as const, label: "JSON", icon: null },
   { value: "slack" as const, label: "Slack", icon: null },
   { value: "discord" as const, label: "Discord", icon: null },
+];
+const MODES = [
+  { value: "instant" as const, label: "Each alert", icon: null },
+  { value: "digest" as const, label: "Digest", icon: null },
 ];
 const label = "text-xs font-medium text-muted-foreground";
 
@@ -102,6 +109,9 @@ export function WebhooksSection({
                 <p className="flex flex-wrap items-center gap-1.5 font-medium">
                   {webhook.name}
                   <Badge variant="secondary">{webhook.format}</Badge>
+                  <Badge variant="secondary">
+                    {webhook.mode === "digest" ? "digest" : "each alert"}
+                  </Badge>
                   {webhook.hasSecret ? (
                     <Badge variant="info">signed</Badge>
                   ) : null}
@@ -202,6 +212,9 @@ function WebhookDialog({
       ? webhook.format
       : "json",
   );
+  const [mode, setMode] = useState<GscTrackerWebhookMode>(
+    webhook?.mode === "digest" ? "digest" : "instant",
+  );
   const save = useMutation({
     meta: { errorToast: false },
     mutationFn: () =>
@@ -215,7 +228,7 @@ function WebhookDialog({
           // Left empty while editing, the current secret stays.
           ...(secret || !webhook ? { secret } : {}),
           format,
-          mode: "digest",
+          mode,
         },
       }),
     onSuccess: () => {
@@ -231,8 +244,7 @@ function WebhookDialog({
             {webhook ? "Edit webhook" : "Add a webhook"}
           </DialogTitle>
           <DialogDescription>
-            Each check POSTs one summary here: new alerts by type, a line each
-            with its URL. With a secret, each request carries an
+            Alerts are POSTed here. With a secret, each request carries an
             X-GSC-Tracker-Signature header: sha256= and the HMAC-SHA256 of the
             body.
           </DialogDescription>
@@ -280,6 +292,18 @@ function WebhookDialog({
               onChange={setFormat}
               items={FORMATS}
             />
+          </div>
+          <div className="space-y-1">
+            <span className={label}>Sending</span>
+            <SegmentedToggle
+              showLabels
+              value={mode}
+              onChange={setMode}
+              items={MODES}
+            />
+            <p className="text-xs text-muted-foreground">
+              Digest sends one message per check with every new alert.
+            </p>
           </div>
         </div>
         {save.error ? (

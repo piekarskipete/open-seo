@@ -56,27 +56,27 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
   phrase_dropped: {
     label: "Phrase dropped",
     description:
-      "A followed phrase's latest position is this many places below its average of the 7 days before, on a phrase with real traffic.",
+      "A followed phrase's latest position is this many places below its average of the 7 days before.",
     scope: "phrases",
     params: [
-      { key: "places", label: "Places dropped", min: 1, max: 100, default: 10 },
+      { key: "places", label: "Places dropped", min: 1, max: 100, default: 5 },
       {
         key: "minImpressions",
         label: "Min. impressions in those 7 days",
         min: 0,
         max: 100000,
-        default: 50,
+        default: 10,
       },
     ],
-    cooldownDays: 7,
+    cooldownDays: 3,
   },
   phrase_entered_top: {
     label: "Phrase reached the top",
     description:
       "A followed phrase reaches the top N while it averaged below it the 7 days before.",
     scope: "phrases",
-    params: [{ key: "top", label: "Top", min: 1, max: 100, default: 3 }],
-    cooldownDays: 14,
+    params: [{ key: "top", label: "Top", min: 1, max: 100, default: 10 }],
+    cooldownDays: 7,
   },
   phrase_outranked: {
     label: "Another page beat the target",
@@ -84,9 +84,9 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
       "Another page of yours got more clicks or impressions than a followed phrase's target URL, several days in a row.",
     scope: "phrases",
     params: [
-      { key: "days", label: "Days in a row", min: 1, max: 14, default: 3 },
+      { key: "days", label: "Days in a row", min: 1, max: 14, default: 2 },
     ],
-    cooldownDays: 14,
+    cooldownDays: 7,
   },
   rank_mismatch: {
     label: "Rank Tracking disagrees",
@@ -94,14 +94,8 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
       "This month, fewer of a phrase's days than this share are within 10 places of Rank Tracking (needs a linked Rank Tracking domain).",
     scope: "phrases",
     params: [
-      { key: "share", label: "Min. match %", min: 1, max: 100, default: 50 },
-      {
-        key: "days",
-        label: "Min. days compared",
-        min: 1,
-        max: 31,
-        default: 10,
-      },
+      { key: "share", label: "Min. match %", min: 1, max: 100, default: 70 },
+      { key: "days", label: "Min. days compared", min: 1, max: 31, default: 5 },
     ],
     cooldownDays: 30,
   },
@@ -119,13 +113,13 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
       "A page group's clicks over the last 7 days are this much below the 7 days before.",
     scope: "groups",
     params: [
-      { key: "percent", label: "Drop %", min: 1, max: 100, default: 30 },
+      { key: "percent", label: "Drop %", min: 1, max: 100, default: 20 },
       {
         key: "minClicks",
         label: "Min. clicks the week before",
         min: 0,
         max: 1000000,
-        default: 100,
+        default: 10,
       },
     ],
     cooldownDays: 7,
@@ -136,13 +130,13 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
       "The whole site's clicks over the last 7 days are this much below the 7 days before.",
     scope: "site",
     params: [
-      { key: "percent", label: "Drop %", min: 1, max: 100, default: 25 },
+      { key: "percent", label: "Drop %", min: 1, max: 100, default: 20 },
       {
         key: "minClicks",
         label: "Min. clicks the week before",
         min: 0,
         max: 10000000,
-        default: 200,
+        default: 20,
       },
     ],
     cooldownDays: 7,
@@ -150,7 +144,7 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
   group_pages_lost: {
     label: "Group page lost its impressions",
     description:
-      "A page of a group had at least this many impressions in the month before and none in the last N days.",
+      "A page of a group had impressions in the month before and none in the last N days.",
     scope: "groups",
     params: [
       {
@@ -158,17 +152,10 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
         label: "Days without impressions",
         min: 3,
         max: 60,
-        default: 21,
-      },
-      {
-        key: "minImpressions",
-        label: "Min. impressions the month before",
-        min: 1,
-        max: 1000000,
-        default: 50,
+        default: 14,
       },
     ],
-    cooldownDays: 60,
+    cooldownDays: 30,
   },
   sitemap_new_urls: {
     label: "New URLs in a sitemap group",
@@ -183,7 +170,7 @@ export const GSC_TRACKER_ALERT_DEFINITIONS: Record<
       "Search Console refused access or didn't answer, or a group's sitemap couldn't be read.",
     scope: "site",
     params: [],
-    cooldownDays: 3,
+    cooldownDays: 1,
   },
 };
 
