@@ -176,7 +176,7 @@ function SiteRow({
       <Link
         to="/p/$projectId/gsc-tracker/$siteId"
         params={{ projectId, siteId: site.id }}
-        search={{ tab: "keywords", days: 28 }}
+        search={{ tab: "overview", days: 28 }}
         className="absolute inset-0 z-0"
         aria-label={`Open ${site.siteUrl}`}
       />

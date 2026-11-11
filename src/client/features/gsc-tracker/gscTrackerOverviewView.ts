@@ -8,7 +8,7 @@ import type {
   GscTrackerWidgetType,
 } from "@/shared/gsc-tracker";
 
-/** Opens a tracker tab, a page group on the Page Groups tab. */
+/** Opens a tracker tab, a page group on the Pages tab. */
 export type WidgetOpen = (tab: GscTrackerTab, group?: string) => void;
 
 /** Rows ordered by the change in clicks, biggest gain first. */

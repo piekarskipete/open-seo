@@ -8,7 +8,7 @@ import { GscTrackerSitePage } from "@/client/features/gsc-tracker/GscTrackerPage
 import { GSC_TRACKER_RANGE_DAYS, GSC_TRACKER_TABS } from "@/shared/gsc-tracker";
 
 const searchSchema = z.object({
-  tab: z.enum(GSC_TRACKER_TABS).catch("keywords"),
+  tab: z.enum(GSC_TRACKER_TABS).catch("overview"),
   days: z
     .union(GSC_TRACKER_RANGE_DAYS.map((days) => z.literal(days)))
     .catch(28),
@@ -19,7 +19,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_app/p/$projectId/gsc-tracker/$siteId")({
   validateSearch: searchSchema,
   search: {
-    middlewares: [stripSearchParams({ tab: "keywords", days: 28 })],
+    middlewares: [stripSearchParams({ tab: "overview", days: 28 })],
   },
   component: GscTrackerSiteRoute,
 });

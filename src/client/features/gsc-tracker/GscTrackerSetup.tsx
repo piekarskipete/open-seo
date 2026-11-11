@@ -245,7 +245,7 @@ function TrackerSettings({
           />
         </div>
         <div className="space-y-1">
-          <div className="text-sm">Query Explorer default sort</div>
+          <div className="text-sm">Queries default sort</div>
           <SegmentedToggle
             showLabels
             value={pending?.explorerSort ?? explorerSort}

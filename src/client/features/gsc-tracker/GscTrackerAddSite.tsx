@@ -63,7 +63,7 @@ export function AddSiteDialog({
       void navigate({
         to: "/p/$projectId/gsc-tracker/$siteId",
         params: { projectId, siteId: result.id },
-        search: { tab: "keywords", days: 28 },
+        search: { tab: "overview", days: 28 },
       });
     },
   });
