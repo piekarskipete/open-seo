@@ -87,6 +87,7 @@ export const URL_FILTER_MODES: {
   { value: "contains", label: "Contains" },
   { value: "regex", label: "Matches regex" },
   { value: "list", label: "Is one of (list)" },
+  { value: "sitemap", label: "In sitemap" },
 ];
 
 /** The page list's refine filter, as applied. */
@@ -120,4 +121,20 @@ export function groupRuleText(group: {
   pattern: string | null;
 }): string {
   return group.kind === "manual" ? "Picked by hand" : (group.pattern ?? "");
+}
+
+/** A group name from a sitemap's file name: "post-sitemap.xml" gives
+ *  "post-sitemap". */
+export function sitemapGroupName(sitemapUrl: string): string {
+  try {
+    const file = new URL(sitemapUrl).pathname.split("/").pop() ?? "";
+    return file.replace(/\.xml(\.gz)?$/i, "") || "Sitemap";
+  } catch {
+    return "Sitemap";
+  }
+}
+
+/** Whether a typed address is a sitemap's (an .xml file). */
+export function looksLikeSitemap(value: string): boolean {
+  return /^https?:\/\/.+\.xml(\.gz)?([?#].*)?$/i.test(value.trim());
 }

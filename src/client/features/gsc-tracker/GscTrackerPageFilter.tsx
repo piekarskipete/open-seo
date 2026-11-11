@@ -124,7 +124,11 @@ export function PageFilterPanel({
                 setDraft((current) => ({ ...current, url: event.target.value }))
               }
               placeholder={
-                draft.urlMode === "regex" ? "/blog/\\d{4}/" : "URL or subfolder"
+                draft.urlMode === "regex"
+                  ? "/blog/\\d{4}/"
+                  : draft.urlMode === "sitemap"
+                    ? "https://example.com/post-sitemap.xml"
+                    : "URL or subfolder"
               }
             />
           )}
@@ -148,8 +152,9 @@ export function PageFilterPanel({
       <p className="text-xs text-muted-foreground">
         All filters must match. Contains ignores case. A regex is tested on the
         full URL, ignoring case. A list matches URLs regardless of scheme,
-        “www.” or a trailing slash. Phrases match any query a page earned in the
-        period.
+        “www.” or a trailing slash. In sitemap lists every URL the sitemap
+        holds, those without data too. Phrases match any query a page earned in
+        the period.
       </p>
       <div className="flex items-center justify-end gap-2 pt-1">
         <Button

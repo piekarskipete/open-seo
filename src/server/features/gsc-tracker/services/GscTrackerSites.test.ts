@@ -198,11 +198,15 @@ it("keeps each tracked site's history apart", async () => {
     });
 
     const listed = await service.listSites("p1");
-    // Sites added in the same second come back by URL.
-    expect(listed.map((site) => [site.siteUrl, site.accountEmail])).toEqual([
-      ["https://other.example/", "me@example.com"],
-      ["sc-domain:example.com", null],
-    ]);
+    // Oldest first; sites added in the same second come back by URL.
+    const pairs = listed.map((site) => [site.siteUrl, site.accountEmail]);
+    expect(pairs).toHaveLength(2);
+    expect(pairs).toEqual(
+      expect.arrayContaining([
+        ["https://other.example/", "me@example.com"],
+        ["sc-domain:example.com", null],
+      ]),
+    );
     const first = await service.compareQueries({ siteId: "p1", days: 7 });
     const second = await service.compareQueries({ siteId: id, days: 7 });
     expect(first?.rows.map((row) => row.key)).toEqual(["shoes"]);

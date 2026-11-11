@@ -16,6 +16,7 @@ import { Input } from "@/client/components/ui/input";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import {
   GROUP_KINDS,
+  looksLikeSitemap,
   refreshGroups,
 } from "@/client/features/gsc-tracker/gscTrackerGroupsView";
 import { useSiteId } from "@/client/features/gsc-tracker/gscTrackerView";
@@ -35,6 +36,7 @@ const fieldLabel = "text-xs font-medium text-muted-foreground";
 export function GroupFormDialog({
   projectId,
   group,
+  initial,
   onSaved,
   onClose,
 }: {
@@ -46,16 +48,20 @@ export function GroupFormDialog({
     kind: GscTrackerGroupKind;
     pattern: string | null;
   };
+  /** A new group's starting values, such as the page list's sitemap. */
+  initial?: { name: string; kind: GscTrackerGroupKind; pattern: string };
   onSaved: (groupId: string) => void;
   onClose: () => void;
 }) {
   const siteId = useSiteId();
   const queryClient = useQueryClient();
-  const [name, setName] = useState(group?.name ?? "");
+  const [name, setName] = useState(group?.name ?? initial?.name ?? "");
   const [kind, setKind] = useState<GscTrackerGroupKind>(
-    group?.kind ?? "directory",
+    group?.kind ?? initial?.kind ?? "directory",
   );
-  const [pattern, setPattern] = useState(group?.pattern ?? "");
+  const [pattern, setPattern] = useState(
+    group?.pattern ?? initial?.pattern ?? "",
+  );
   const kindInfo = GROUP_KINDS.find((item) => item.value === kind);
   const save = useMutation({
     meta: { errorToast: false },
@@ -144,7 +150,12 @@ export function GroupFormDialog({
               <Input
                 value={pattern}
                 maxLength={2048}
-                onChange={(event) => setPattern(event.target.value)}
+                onChange={(event) => {
+                  setPattern(event.target.value);
+                  // A sitemap's address belongs to a sitemap group.
+                  if (!group && looksLikeSitemap(event.target.value))
+                    setKind("sitemap");
+                }}
                 placeholder={kindInfo?.placeholder}
                 className={cn(kind === "regex" && "font-mono")}
               />

@@ -79,6 +79,7 @@ export const GSC_TRACKER_URL_FILTER_MODES = [
   "contains",
   "regex",
   "list",
+  "sitemap",
 ] as const;
 
 export type GscTrackerUrlFilterMode =

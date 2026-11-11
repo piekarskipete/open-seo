@@ -5,8 +5,8 @@ import {
 } from "../repositories/GscTrackerGroupRepository";
 import {
   compileGroupRegex,
-  isOnProperty,
   refreshGroup,
+  requireSitemapUrl,
 } from "./gscTrackerGroupRules";
 import {
   dailySeries,
@@ -64,24 +64,17 @@ function cleanPattern(
     );
   if (value.length > MAX_PATTERN_LENGTH)
     throw new AppError("VALIDATION_ERROR", "That pattern is too long.");
+  if (kind === "directory" && /\.xml(\.gz)?([?#].*)?$/i.test(value))
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "That's a sitemap's address: pick Sitemap to follow the URLs it lists.",
+    );
   if (kind === "regex" && !compileGroupRegex(value))
     throw new AppError(
       "VALIDATION_ERROR",
       "That regular expression isn't valid.",
     );
-  if (kind === "sitemap") {
-    let url: URL;
-    try {
-      url = new URL(value);
-    } catch {
-      throw new AppError("VALIDATION_ERROR", "Enter the sitemap's full URL.");
-    }
-    if (!/^https?:$/.test(url.protocol) || !isOnProperty(site.siteUrl, value))
-      throw new AppError(
-        "VALIDATION_ERROR",
-        "The sitemap must be on this site's domain.",
-      );
-  }
+  if (kind === "sitemap") return requireSitemapUrl(site, value);
   return value;
 }
 

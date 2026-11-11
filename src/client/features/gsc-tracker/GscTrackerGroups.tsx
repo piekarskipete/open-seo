@@ -88,6 +88,7 @@ export function PageGroupsTab({
       groups={groupOptions}
       canManage={canManage}
       onSelect={setOpenUrl}
+      onGroupCreated={onGroupChange}
     />
   );
   return (
