@@ -11,7 +11,6 @@ export const GSC_TRACKER_TABS = [
   "explorer",
   "pages",
   "cannibalization",
-  "alerts",
 ] as const;
 
 export type GscTrackerTab = (typeof GSC_TRACKER_TABS)[number];

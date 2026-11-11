@@ -15,7 +15,6 @@ import { QueryDetailDialog } from "@/client/features/gsc-tracker/GscTrackerParts
 import { KeywordsTab } from "@/client/features/gsc-tracker/GscTrackerKeywords";
 import { ExplorerTab } from "@/client/features/gsc-tracker/GscTrackerExplorer";
 import { PageGroupsTab } from "@/client/features/gsc-tracker/GscTrackerGroups";
-import { AlertsTab } from "@/client/features/gsc-tracker/GscTrackerAlerts";
 import { OverviewBoard } from "@/client/features/gsc-tracker/GscTrackerOverviewBoard";
 import {
   DateFormatContext,
@@ -53,7 +52,6 @@ const TAB_LABELS: Record<GscTrackerTab, string> = {
   explorer: "Query Explorer",
   pages: "Page Groups",
   cannibalization: "Cannibalization",
-  alerts: "Alerts",
 };
 
 /** What each tab is for, shown under the tabs. */
@@ -67,8 +65,6 @@ const TAB_HINTS: Record<GscTrackerTab, string> = {
   pages:
     "Every page, and your page groups: a sitemap, a directory, a regex or your own list.",
   cannibalization: "Queries split between two or more of your pages.",
-  alerts:
-    "Webhooks and the rules that send alerts to them after each sync, with what was sent.",
 };
 
 /** One tracked site: its status, then the report tabs. */
@@ -188,7 +184,7 @@ function TrackerReport({
           </TabsList>
         </Tabs>
         {/* Followed phrases pick a month instead of a window. */}
-        {tab === "keywords" || tab === "alerts" ? null : (
+        {tab === "keywords" ? null : (
           <SegmentedToggle
             showLabels
             value={`${days}`}
@@ -205,9 +201,7 @@ function TrackerReport({
         )}
       </div>
       <p className="-mt-2 text-xs text-muted-foreground">{TAB_HINTS[tab]}</p>
-      {tab === "keywords" || tab === "alerts" ? null : (
-        <HistoryNotice {...history} days={days} />
-      )}
+      {tab === "keywords" ? null : <HistoryNotice {...history} days={days} />}
       {tab === "keywords" ? (
         <KeywordsTab projectId={projectId} canManage={canManage} />
       ) : tab === "overview" ? (
@@ -227,8 +221,6 @@ function TrackerReport({
           onGroupChange={(group) => onChange({ group })}
           onSelectQuery={setSelectedQuery}
         />
-      ) : tab === "alerts" ? (
-        <AlertsTab projectId={projectId} canManage={canManage} />
       ) : tab === "cannibalization" ? (
         <CannibalizationTab
           projectId={projectId}
