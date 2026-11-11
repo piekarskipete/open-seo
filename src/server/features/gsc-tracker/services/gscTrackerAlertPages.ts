@@ -66,6 +66,7 @@ async function groupTrafficDrop(
         subject: group.id,
         date: end,
         title: `Group “${group.name}” lost ${drop}% of its clicks`,
+        line: `${group.name}: ${before} → ${now} clicks (−${drop}%)`,
         message: `${now} clicks in the 7 days to ${end}, against ${before} the 7 days before.`,
         data: { group: group.name, clicks: now, previousClicks: before, drop },
       },
@@ -109,6 +110,7 @@ async function siteTrafficDrop(
       subject: "site",
       date: evalDate,
       title: `${site.siteUrl} lost ${drop}% of its clicks`,
+      line: `Whole site: ${before} → ${now} clicks (−${drop}%)`,
       message: `${now} clicks in the 7 days to ${evalDate}, against ${before} the 7 days before.`,
       data: { clicks: now, previousClicks: before, drop },
     },
@@ -159,12 +161,17 @@ async function groupPagesLost(
     )
     .groupBy(m.groupId, gscTrackerUrlGroups.name, m.url);
   return rows
-    .filter((row) => row.earlier > 0 && row.recent === 0)
+    .filter(
+      (row) =>
+        row.earlier >= Math.max(1, params.minImpressions ?? 0) &&
+        row.recent === 0,
+    )
     .slice(0, MAX_LISTED_URLS * 5)
     .map((row) => ({
       subject: row.url,
       date: end,
       title: `A page of “${row.group}” lost its impressions`,
+      line: `${row.url} (${row.group}): ${row.earlier} impressions before, none in ${quiet} days`,
       message: `${row.url} had ${row.earlier} impressions in the month before and none in the ${quiet} days to ${end}.`,
       data: { group: row.group, url: row.url, earlierImpressions: row.earlier },
     }));
@@ -210,6 +217,7 @@ async function sitemapNewUrls(
       subject: group.id,
       date: day,
       title: `${urls.length} new URL${urls.length === 1 ? "" : "s"} in “${group.name}”`,
+      line: `${group.name}: ${urls.slice(0, 5).join(", ")}${urls.length > 5 ? ` +${urls.length - 5} more` : ""}`,
       message: `The sitemap ${group.pattern ?? ""} lists new URLs: ${urls.slice(0, MAX_LISTED_URLS).join(", ")}${urls.length > MAX_LISTED_URLS ? "…" : ""}`,
       data: {
         group: group.name,
@@ -233,6 +241,7 @@ async function syncError(
       subject: `site: ${site.lastError}`,
       date: today,
       title: `${site.siteUrl}: Search Console sync failed`,
+      line: `Search Console: ${site.lastError}`,
       message: site.lastError,
       data: { error: site.lastError },
     });
@@ -242,6 +251,7 @@ async function syncError(
         subject: `group ${group.id}: ${group.lastError}`,
         date: today,
         title: `Group “${group.name}” couldn't be refreshed`,
+        line: `Group ${group.name}: ${group.lastError}`,
         message: group.lastError,
         data: { group: group.name, error: group.lastError },
       });
