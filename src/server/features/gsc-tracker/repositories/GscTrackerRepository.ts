@@ -137,6 +137,8 @@ async function update(
       | "pagesOldestDate"
       | "pagesNewestDate"
       | "pagesSyncedAt"
+      | "overviewLayout"
+      | "cannibalExclusions"
     >
   >,
 ): Promise<void> {

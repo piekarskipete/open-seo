@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/db";
 import {
   gscTrackerPages,
@@ -26,9 +26,11 @@ import { compareQueries } from "./gscTrackerExplorer";
 import { syncKeywords } from "./gscTrackerKeywordSync";
 import {
   GSC_TRACKER_SORT_KEYS,
+  parseOverviewLayout,
   type GscTrackerDateFormat,
   type GscTrackerPositionFormat,
   type GscTrackerSortKey,
+  type GscTrackerWidget,
 } from "@/shared/gsc-tracker";
 
 /**
@@ -36,12 +38,6 @@ import {
  * trends from it. Self-hosting only for now: storing Google data beyond the
  * dashboard's short cache is a privacy-policy decision for the hosted service.
  */
-
-// A query counts as cannibalized when a second page earns at least this share
-// of its impressions, and the query has at least this many.
-const CANNIBAL_MIN_SHARE = 0.1;
-const CANNIBAL_MIN_IMPRESSIONS = 10;
-const CANNIBAL_LIMIT = 200;
 
 /** Self-hosted deployments that hold their own Google access. Behind the
  *  Every App gateway Google calls are made per request, not from the cron. */
@@ -84,6 +80,7 @@ function siteState(site: GscTrackerSite, now = new Date()) {
     positionFormat,
     explorerSort,
     dateFormat,
+    overviewLayout: parseOverviewLayout(site.overviewLayout),
     progress: Math.min(1, storedDays / daysBetween(floor, latest)),
   };
 }
@@ -231,6 +228,16 @@ async function updateSettings(
   await GscTrackerRepository.update(site.id, settings);
 }
 
+/** The Overview tab's widgets, in order. */
+async function saveOverviewLayout(
+  site: GscTrackerSite,
+  widgets: GscTrackerWidget[],
+) {
+  await GscTrackerRepository.update(site.id, {
+    overviewLayout: JSON.stringify(widgets),
+  });
+}
+
 /** Stops tracking a site and deletes its stored history. */
 async function removeSite(site: GscTrackerSite) {
   await GscTrackerRepository.remove(site.id);
@@ -356,74 +363,6 @@ async function getQueryDetail(input: {
   };
 }
 
-/** Queries where more than one page shares the impressions. */
-async function getCannibalization(siteId: string, days: number) {
-  const range = await periods(siteId, days);
-  if (!range) return null;
-  const r = gscTrackerRows;
-  const inWindow = and(
-    eq(r.siteId, siteId),
-    gte(r.date, range.currentStart),
-    lte(r.date, range.currentEnd),
-  );
-  const sharedQueries = db
-    .select({ queryId: r.queryId })
-    .from(r)
-    .where(inWindow)
-    .groupBy(r.queryId)
-    .having(sql`count(distinct ${r.pageId}) > 1`);
-  const rows = await db
-    .select({
-      query: gscTrackerQueries.query,
-      page: gscTrackerPages.url,
-      clicks: sql<number>`sum(${r.clicks})`.mapWith(Number),
-      impressions: sql<number>`sum(${r.impressions})`.mapWith(Number),
-      weight: sql<number>`sum(${r.position} * ${r.impressions})`.mapWith(
-        Number,
-      ),
-    })
-    .from(r)
-    .innerJoin(gscTrackerQueries, eq(gscTrackerQueries.id, r.queryId))
-    .innerJoin(gscTrackerPages, eq(gscTrackerPages.id, r.pageId))
-    .where(and(inWindow, inArray(r.queryId, sharedQueries)))
-    .groupBy(
-      gscTrackerQueries.id,
-      gscTrackerQueries.query,
-      gscTrackerPages.id,
-      gscTrackerPages.url,
-    );
-
-  const byQuery = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const list = byQuery.get(row.query) ?? [];
-    list.push(row);
-    byQuery.set(row.query, list);
-  }
-  const queries = [];
-  for (const [query, pages] of byQuery) {
-    const impressions = pages.reduce(
-      (total, page) => total + page.impressions,
-      0,
-    );
-    if (impressions < CANNIBAL_MIN_IMPRESSIONS) continue;
-    const ranked = pages.map((page) => ({
-      url: page.page,
-      share: page.impressions / impressions,
-      ...metrics(page.clicks, page.impressions, page.weight),
-    }));
-    ranked.sort((a, b) => b.impressions - a.impressions);
-    if ((ranked[1]?.share ?? 0) < CANNIBAL_MIN_SHARE) continue;
-    queries.push({
-      query,
-      impressions,
-      clicks: pages.reduce((total, page) => total + page.clicks, 0),
-      pages: ranked,
-    });
-  }
-  queries.sort((a, b) => b.impressions - a.impressions);
-  return { ...range, queries: queries.slice(0, CANNIBAL_LIMIT) };
-}
-
 export const GscTrackerService = {
   isAvailable,
   getAvailability,
@@ -433,9 +372,9 @@ export const GscTrackerService = {
   addSite,
   syncNow,
   updateSettings,
+  saveOverviewLayout,
   removeSite,
   getOverview,
   compareQueries,
   getQueryDetail,
-  getCannibalization,
 };
