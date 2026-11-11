@@ -267,6 +267,93 @@ async function fetchSitemapDocumentWithRetry(
 }
 
 /**
+ * Page URLs listed by the given sitemaps of one origin, following sitemap
+ * indexes, up to `maxUrls`.
+ */
+export async function collectSitemapUrls(input: {
+  sources: string[];
+  origin: string;
+  maxUrls: number;
+  access?: CrawlerAccess | null;
+  waitForRateLimit?: RateLimitWait;
+}): Promise<Set<string>> {
+  const waitForRateLimit = input.waitForRateLimit ?? createRateLimitWait();
+  const allUrls = new Set<string>();
+
+  const queue: Array<{ url: string; depth: number }> = input.sources
+    .map((url) => normalizeUrl(url, input.origin))
+    .filter((url): url is string => url !== null)
+    .filter((url) => isSameOrigin(url, input.origin))
+    .map((url) => ({ url, depth: MAX_SITEMAP_DEPTH }));
+  const seenSitemapDocs = new Set<string>();
+  let fetchedDocs = 0;
+  let failedDocs = 0;
+  let timedOutDocs = 0;
+
+  while (queue.length > 0 && allUrls.size < input.maxUrls) {
+    if (fetchedDocs >= MAX_SITEMAP_DOCS) {
+      break;
+    }
+    const batch = queue.splice(0, SITEMAP_CONCURRENCY);
+    await Promise.all(
+      batch.map(async ({ url, depth }) => {
+        const normalizedUrl = normalizeUrl(url);
+        if (
+          !normalizedUrl ||
+          !isSameOrigin(normalizedUrl, input.origin) ||
+          depth <= 0 ||
+          seenSitemapDocs.has(normalizedUrl)
+        ) {
+          return;
+        }
+
+        seenSitemapDocs.add(normalizedUrl);
+        fetchedDocs += 1;
+
+        const result = await fetchSitemapDocumentWithRetry(
+          normalizedUrl,
+          input.access,
+          waitForRateLimit,
+        );
+        if (
+          result.pageUrls.length === 0 &&
+          result.nestedSitemaps.length === 0
+        ) {
+          failedDocs += 1;
+          if (result.timedOut) {
+            timedOutDocs += 1;
+          }
+          return;
+        }
+
+        for (const pageUrl of result.pageUrls) {
+          if (!isSameOrigin(pageUrl, input.origin)) continue;
+          if (allUrls.size >= input.maxUrls) break;
+          allUrls.add(pageUrl);
+        }
+
+        if (depth <= 1) return;
+
+        for (const nestedUrl of result.nestedSitemaps) {
+          if (!isSameOrigin(nestedUrl, input.origin)) continue;
+          if (!seenSitemapDocs.has(nestedUrl)) {
+            queue.push({ url: nestedUrl, depth: depth - 1 });
+          }
+        }
+      }),
+    );
+  }
+
+  if (failedDocs > 0) {
+    console.warn(
+      `Sitemap discovery completed with partial failures for ${input.origin}: fetched=${fetchedDocs}, failed=${failedDocs}, timedOut=${timedOutDocs}, discoveredUrls=${allUrls.size}`,
+    );
+  }
+
+  return allUrls;
+}
+
+/**
  * Discover all page URLs from robots.txt + sitemaps for an origin.
  * Also tries the default /sitemap.xml if not listed in robots.txt.
  */
@@ -284,79 +371,13 @@ export async function discoverUrls(
   sitemapSources.add(`${origin}/sitemap.xml`);
 
   const maxDiscoveredUrls = Math.min(Math.max(maxPages * 20, 500), 50_000);
-  const allUrls = new Set<string>();
-
-  const queue: Array<{ url: string; depth: number }> = Array.from(
-    sitemapSources,
-  )
-    .map((url) => normalizeUrl(url, origin))
-    .filter((url): url is string => url !== null)
-    .filter((url) => isSameOrigin(url, origin))
-    .map((url) => ({ url, depth: MAX_SITEMAP_DEPTH }));
-  const seenSitemapDocs = new Set<string>();
-  let fetchedDocs = 0;
-  let failedDocs = 0;
-  let timedOutDocs = 0;
-
-  while (queue.length > 0 && allUrls.size < maxDiscoveredUrls) {
-    if (fetchedDocs >= MAX_SITEMAP_DOCS) {
-      break;
-    }
-    const batch = queue.splice(0, SITEMAP_CONCURRENCY);
-    await Promise.all(
-      batch.map(async ({ url, depth }) => {
-        const normalizedUrl = normalizeUrl(url);
-        if (
-          !normalizedUrl ||
-          !isSameOrigin(normalizedUrl, origin) ||
-          depth <= 0 ||
-          seenSitemapDocs.has(normalizedUrl)
-        ) {
-          return;
-        }
-
-        seenSitemapDocs.add(normalizedUrl);
-        fetchedDocs += 1;
-
-        const result = await fetchSitemapDocumentWithRetry(
-          normalizedUrl,
-          access,
-          waitForRateLimit,
-        );
-        if (
-          result.pageUrls.length === 0 &&
-          result.nestedSitemaps.length === 0
-        ) {
-          failedDocs += 1;
-          if (result.timedOut) {
-            timedOutDocs += 1;
-          }
-          return;
-        }
-
-        for (const pageUrl of result.pageUrls) {
-          if (!isSameOrigin(pageUrl, origin)) continue;
-          if (allUrls.size >= maxDiscoveredUrls) break;
-          allUrls.add(pageUrl);
-        }
-
-        if (depth <= 1) return;
-
-        for (const nestedUrl of result.nestedSitemaps) {
-          if (!isSameOrigin(nestedUrl, origin)) continue;
-          if (!seenSitemapDocs.has(nestedUrl)) {
-            queue.push({ url: nestedUrl, depth: depth - 1 });
-          }
-        }
-      }),
-    );
-  }
-
-  if (failedDocs > 0) {
-    console.warn(
-      `Sitemap discovery completed with partial failures for ${origin}: fetched=${fetchedDocs}, failed=${failedDocs}, timedOut=${timedOutDocs}, discoveredUrls=${allUrls.size}`,
-    );
-  }
+  const allUrls = await collectSitemapUrls({
+    sources: Array.from(sitemapSources),
+    origin,
+    maxUrls: maxDiscoveredUrls,
+    access,
+    waitForRateLimit,
+  });
 
   // Every discovered URL is returned, not just the first maxPages. Seeding is
   // also what records each page's in-sitemap flag on the frontier, so

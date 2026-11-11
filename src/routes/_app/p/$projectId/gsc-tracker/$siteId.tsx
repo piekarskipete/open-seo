@@ -12,6 +12,8 @@ const searchSchema = z.object({
   days: z
     .union(GSC_TRACKER_RANGE_DAYS.map((days) => z.literal(days)))
     .catch(28),
+  // The open page group on the Page Groups tab.
+  group: z.string().min(1).max(100).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_app/p/$projectId/gsc-tracker/$siteId")({
@@ -33,6 +35,7 @@ function GscTrackerSiteRoute() {
       siteId={siteId}
       tab={search.tab}
       days={search.days}
+      groupId={search.group}
       onChange={(update) => {
         void navigate({
           search: (prev) => ({ ...prev, ...update }),

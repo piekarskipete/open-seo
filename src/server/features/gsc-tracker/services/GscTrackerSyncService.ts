@@ -6,6 +6,8 @@ import { querySite } from "./gscTrackerAccess";
 import { gscTrackerLatestDay, readRowsPerDay } from "./gscTrackerDates";
 import { isStale, planSyncDays, syncErrorMessage } from "./gscTrackerPlan";
 import { syncKeywords } from "./gscTrackerKeywordSync";
+import { isPageHistoryDue, syncPageDays } from "./gscTrackerPageSync";
+import { refreshSiteGroups } from "./gscTrackerGroupRules";
 import { describeError } from "@/server/lib/errors";
 
 // Days fetched per site per tick: one Search Console call each, plus one
@@ -134,6 +136,15 @@ export async function syncTracker(
   });
 }
 
+/** The per-page history, then the page groups' rules, which can match the
+ *  pages it just found. */
+export async function syncPagesAndGroups(siteId: string, now = new Date()) {
+  const site = await GscTrackerRepository.get(siteId);
+  if (!site) return;
+  if (isPageHistoryDue(site, now)) await syncPageDays(site, now);
+  await refreshSiteGroups(site, now);
+}
+
 /** Cron body: one batch for every tracker with work left. */
 export async function runScheduledGscTracker(now = new Date()) {
   const deadline = Date.now() + TICK_DEADLINE_MS;
@@ -142,6 +153,7 @@ export async function runScheduledGscTracker(now = new Date()) {
     try {
       if (isTrackerDue(tracker, now)) await syncTracker(tracker, now);
       await syncKeywords(tracker, now);
+      await syncPagesAndGroups(tracker.id, now);
     } catch (error) {
       console.error("[gsc-tracker] tracker sync crashed", {
         siteId: tracker.id,
