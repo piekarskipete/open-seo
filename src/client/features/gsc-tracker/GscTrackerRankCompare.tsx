@@ -95,38 +95,32 @@ export function RankBadge({ keyword }: { keyword: Keyword }) {
     rankDays: entry.days,
     targetUrl: keyword.targetUrl,
   });
-  const position =
+  const latest =
     summary.latest === null
-      ? "–"
+      ? "no check yet"
       : summary.latest.position === null
         ? "not found"
-        : `${summary.latest.position}`;
+        : `position ${summary.latest.position}`;
+  if (summary.compared === 0)
+    return (
+      <Badge
+        variant="secondary"
+        title={`No day with both Search Console and Rank Tracking positions this month. Latest Rank Tracking check: ${latest}.`}
+      >
+        Rank Tracking: no overlap yet
+      </Badge>
+    );
+  // Shares of the days both sources measured: within 10 places, or not.
+  const matchShare = Math.round((summary.agreeing / summary.compared) * 100);
+  const differShare = 100 - matchShare;
   return (
     <Badge
-      variant={
-        summary.verdict === "agrees"
-          ? "info"
-          : summary.verdict === "differs"
-            ? "warning"
-            : "secondary"
-      }
-      title={
-        summary.compared === 0
-          ? "No day with both Search Console and Rank Tracking positions this month."
-          : `${summary.agreeing} of ${summary.compared} days within 10 places of Search Console${summary.otherUrl ? `. Rank Tracking found ${summary.otherUrl}` : ""}`
-      }
+      variant={summary.verdict === "agrees" ? "info" : "warning"}
+      title={`${summary.agreeing} of ${summary.compared} days within 10 places of Search Console. Latest Rank Tracking check: ${latest}${summary.otherUrl ? `, on ${summary.otherUrl}` : ""}.`}
     >
-      {summary.verdict === "agrees"
-        ? "✓ "
-        : summary.verdict === "differs"
-          ? "! "
-          : ""}
-      Rank Tracking {position}
-      {summary.verdict === "agrees"
-        ? " · matches GSC"
-        : summary.verdict === "differs"
-          ? " · differs from GSC"
-          : ""}
+      {summary.verdict === "agrees" ? "✓" : "!"} Rank Tracking: {matchShare}%
+      match
+      {differShare > 0 ? ` · ${differShare}% differ` : ""}
     </Badge>
   );
 }
