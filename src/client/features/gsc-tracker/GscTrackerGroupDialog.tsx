@@ -186,7 +186,7 @@ export function GroupFormDialog({
   );
 }
 
-/** Puts the selected URLs into a group, or into a new hand-picked one. */
+/** Puts the selected URLs into a group, or into a new custom list. */
 export function AddToGroupDialog({
   projectId,
   urls,

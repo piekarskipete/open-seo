@@ -52,7 +52,7 @@ export const GROUP_KINDS: {
 }[] = [
   {
     value: "manual",
-    label: "Hand-picked",
+    label: "Custom list",
     hint: "Add URLs from the page list: select them and pick “Add to group”.",
     placeholder: "",
   },
@@ -120,7 +120,9 @@ export function groupRuleText(group: {
   kind: GscTrackerGroupKind;
   pattern: string | null;
 }): string {
-  return group.kind === "manual" ? "Picked by hand" : (group.pattern ?? "");
+  return group.kind === "manual"
+    ? "Your own list of URLs"
+    : (group.pattern ?? "");
 }
 
 /** A group name from a sitemap's file name: "post-sitemap.xml" gives
