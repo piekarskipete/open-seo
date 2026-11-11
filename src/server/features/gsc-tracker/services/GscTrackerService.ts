@@ -20,7 +20,7 @@ import {
   gscTrackerFloor,
   gscTrackerLatestDay,
 } from "./gscTrackerDates";
-import { syncTracker } from "./GscTrackerSyncService";
+import { syncPagesAndGroups, syncTracker } from "./GscTrackerSyncService";
 import { customPeriods, metrics, periods } from "./gscTrackerWindows";
 import { compareQueries } from "./gscTrackerExplorer";
 import { syncKeywords } from "./gscTrackerKeywordSync";
@@ -206,6 +206,7 @@ async function addSite(input: {
   // fetches the rest of the history.
   await syncTracker(site);
   await syncKeywords(site);
+  await syncPagesAndGroups(site.id);
   return { id: site.id };
 }
 
@@ -214,6 +215,7 @@ async function syncNow(site: GscTrackerSite) {
   await syncTracker(site);
   const fresh = await GscTrackerRepository.get(site.id);
   if (fresh) await syncKeywords(fresh);
+  await syncPagesAndGroups(site.id);
 }
 
 /** A site's display settings: how positions read (7.4 or 7), how day

@@ -18,6 +18,7 @@ import {
 } from "@/client/features/gsc-tracker/GscTrackerParts";
 import { KeywordsTab } from "@/client/features/gsc-tracker/GscTrackerKeywords";
 import { ExplorerTab } from "@/client/features/gsc-tracker/GscTrackerExplorer";
+import { PageGroupsTab } from "@/client/features/gsc-tracker/GscTrackerGroups";
 import {
   DateFormatContext,
   formatDay,
@@ -46,9 +47,17 @@ const RANGES: { days: GscTrackerRangeDays; label: string }[] = [
   { days: 480, label: "16 months" },
 ];
 
+/** A change to the site page's search params. */
+type TrackerUpdate = {
+  tab?: GscTrackerTab;
+  days?: GscTrackerRangeDays;
+  group?: string | undefined;
+};
+
 const TAB_LABELS: Record<GscTrackerTab, string> = {
   keywords: "Keywords",
   explorer: "Query Explorer",
+  pages: "Page Groups",
   overview: "Overview",
   cannibalization: "Cannibalization",
 };
@@ -59,16 +68,15 @@ export function GscTrackerSitePage({
   siteId,
   tab,
   days,
+  groupId,
   onChange,
 }: {
   projectId: string;
   siteId: string;
   tab: GscTrackerTab;
   days: GscTrackerRangeDays;
-  onChange: (update: {
-    tab?: GscTrackerTab;
-    days?: GscTrackerRangeDays;
-  }) => void;
+  groupId: string | undefined;
+  onChange: (update: TrackerUpdate) => void;
 }) {
   const status = useQuery({
     queryKey: ["gscTrackerStatus", siteId],
@@ -114,6 +122,7 @@ export function GscTrackerSitePage({
                 }}
                 tab={tab}
                 days={days}
+                groupId={groupId}
                 onChange={onChange}
               />
             </DateFormatContext.Provider>
@@ -137,6 +146,7 @@ function TrackerReport({
   history,
   tab,
   days,
+  groupId,
   onChange,
 }: {
   projectId: string;
@@ -146,10 +156,8 @@ function TrackerReport({
   history: { oldestDate: string | null; newestDate: string; progress: number };
   tab: GscTrackerTab;
   days: GscTrackerRangeDays;
-  onChange: (update: {
-    tab?: GscTrackerTab;
-    days?: GscTrackerRangeDays;
-  }) => void;
+  groupId: string | undefined;
+  onChange: (update: TrackerUpdate) => void;
 }) {
   const [selectedQuery, setSelectedQuery] = useState<string | null>(null);
   return (
@@ -189,6 +197,15 @@ function TrackerReport({
         <KeywordsTab projectId={projectId} canManage={canManage} />
       ) : tab === "overview" ? (
         <OverviewTab projectId={projectId} days={days} />
+      ) : tab === "pages" ? (
+        <PageGroupsTab
+          projectId={projectId}
+          days={days}
+          canManage={canManage}
+          groupId={groupId}
+          onGroupChange={(group) => onChange({ group })}
+          onSelectQuery={setSelectedQuery}
+        />
       ) : tab === "cannibalization" ? (
         <CannibalizationTab
           projectId={projectId}

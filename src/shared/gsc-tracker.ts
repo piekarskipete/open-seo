@@ -6,6 +6,7 @@ export type GscTrackerRangeDays = (typeof GSC_TRACKER_RANGE_DAYS)[number];
 export const GSC_TRACKER_TABS = [
   "keywords",
   "explorer",
+  "pages",
   "overview",
   "cannibalization",
 ] as const;
@@ -58,3 +59,27 @@ export const GSC_TRACKER_TAG_NAME_MAX = 40;
 export const GSC_TRACKER_CHART_DAYS = [7, 28, 90, 180, 365] as const;
 
 export type GscTrackerChartDays = (typeof GSC_TRACKER_CHART_DAYS)[number];
+
+/** How a page group picks its URLs: by hand, from a sitemap, every page
+ *  under a directory, or every page matching a regular expression. */
+export const GSC_TRACKER_GROUP_KINDS = [
+  "manual",
+  "sitemap",
+  "directory",
+  "regex",
+] as const;
+
+export type GscTrackerGroupKind = (typeof GSC_TRACKER_GROUP_KINDS)[number];
+
+/** The longest page group name, in characters. */
+export const GSC_TRACKER_GROUP_NAME_MAX = 60;
+
+/** How the page list's URL filter reads its text. */
+export const GSC_TRACKER_URL_FILTER_MODES = [
+  "contains",
+  "regex",
+  "list",
+] as const;
+
+export type GscTrackerUrlFilterMode =
+  (typeof GSC_TRACKER_URL_FILTER_MODES)[number];

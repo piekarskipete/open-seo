@@ -4,11 +4,14 @@ import { DB_BATCH_SIZE, runBatch } from "@/db/runBatch";
 import {
   gscTrackerKeywordDays,
   gscTrackerKeywords,
+  gscTrackerPageDays,
   gscTrackerPages,
   gscTrackerQueries,
   gscTrackerRows,
   gscTrackerSites,
   gscTrackerTotals,
+  gscTrackerUrlGroupMembers,
+  gscTrackerUrlGroups,
 } from "@/db/schema";
 import { GscTrackerTagRepository } from "./GscTrackerTagRepository";
 
@@ -131,6 +134,9 @@ async function update(
       | "positionFormat"
       | "explorerSort"
       | "dateFormat"
+      | "pagesOldestDate"
+      | "pagesNewestDate"
+      | "pagesSyncedAt"
     >
   >,
 ): Promise<void> {
@@ -158,6 +164,7 @@ async function clearHistory(siteId: string): Promise<void> {
       .where(eq(gscTrackerKeywords.siteId, siteId)),
     tx.delete(gscTrackerRows).where(eq(gscTrackerRows.siteId, siteId)),
     tx.delete(gscTrackerTotals).where(eq(gscTrackerTotals.siteId, siteId)),
+    tx.delete(gscTrackerPageDays).where(eq(gscTrackerPageDays.siteId, siteId)),
     tx.delete(gscTrackerQueries).where(eq(gscTrackerQueries.siteId, siteId)),
     tx.delete(gscTrackerPages).where(eq(gscTrackerPages.siteId, siteId)),
   ]);
@@ -167,6 +174,18 @@ async function clearHistory(siteId: string): Promise<void> {
 async function remove(siteId: string): Promise<void> {
   await clearHistory(siteId);
   await GscTrackerTagRepository.clearSite(siteId);
+  const siteGroups = db
+    .select({ id: gscTrackerUrlGroups.id })
+    .from(gscTrackerUrlGroups)
+    .where(eq(gscTrackerUrlGroups.siteId, siteId));
+  await runBatch((tx) => [
+    tx
+      .delete(gscTrackerUrlGroupMembers)
+      .where(inArray(gscTrackerUrlGroupMembers.groupId, siteGroups)),
+    tx
+      .delete(gscTrackerUrlGroups)
+      .where(eq(gscTrackerUrlGroups.siteId, siteId)),
+  ]);
   await db
     .delete(gscTrackerKeywords)
     .where(eq(gscTrackerKeywords.siteId, siteId));
