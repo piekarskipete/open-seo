@@ -138,7 +138,19 @@ export function KeywordDetail({
   return (
     <div className="space-y-3 bg-muted/30 px-3 py-3 sm:pl-8">
       {target ? (
-        <DayGrid page={target} days={days} outranked={outranked} />
+        <div className="space-y-1">
+          <p className="text-xs">
+            <span className="font-medium">Search Console</span>
+            <span className="text-muted-foreground">
+              {" "}
+              · average position of the day ·{" "}
+              <span className="text-success">green</span> moved up,{" "}
+              <span className="text-destructive">red</span> moved down since the
+              day before
+            </span>
+          </p>
+          <DayGrid page={target} days={days} outranked={outranked} />
+        </div>
       ) : (
         <p className="text-xs text-muted-foreground">
           The target URL didn&apos;t show for this phrase in this month.
