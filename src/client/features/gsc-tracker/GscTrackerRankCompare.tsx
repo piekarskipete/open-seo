@@ -138,7 +138,6 @@ export function RankDetail({
 }) {
   const rank = useRank();
   const dateFormat = useDateFormat();
-  const { add, ready } = useAddToRankTracker();
   const data = rank?.data;
   if (!data) return null;
   if (!data.link)
@@ -151,20 +150,10 @@ export function RankDetail({
   const entry = data.keywords[keyword.id];
   if (!entry?.trackingKeywordId)
     return (
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        This phrase isn&apos;t tracked in Rank Tracking for {data.link.domain}.
-        {canManage && ready ? (
-          <Button
-            variant="outline"
-            size="xs"
-            pending={add.isPending}
-            onClick={() => add.mutate([keyword.query])}
-          >
-            <Crosshair data-icon="inline-start" />
-            Add to Rank Tracking
-          </Button>
-        ) : null}
-      </div>
+      <p className="text-xs text-muted-foreground">
+        This phrase isn&apos;t tracked in Rank Tracking for {data.link.domain}
+        {canManage ? ": add it with “Add to Rank Tracking” below." : "."}
+      </p>
     );
   const gscDays = targetDays(keyword);
   const summary = summarizeRank({
@@ -291,6 +280,27 @@ export function RankDetail({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** The phrase's "Add to Rank Tracking" action, beside its start date and
+ *  checkpoints, while the linked domain doesn't track it yet. */
+export function AddToRankButton({ keyword }: { keyword: Keyword }) {
+  const rank = useRank();
+  const { add, ready } = useAddToRankTracker();
+  const entry = rank?.data?.keywords[keyword.id];
+  if (!ready || !entry || entry.trackingKeywordId) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="text-muted-foreground"
+      pending={add.isPending}
+      onClick={() => add.mutate([keyword.query])}
+    >
+      <Crosshair className="size-3.5" />
+      Add to Rank Tracking
+    </Button>
   );
 }
 
