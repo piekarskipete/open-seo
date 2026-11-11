@@ -47,11 +47,24 @@ type TrackerUpdate = {
 };
 
 const TAB_LABELS: Record<GscTrackerTab, string> = {
-  keywords: "Keywords",
-  explorer: "Query Explorer",
-  pages: "Page Groups",
   overview: "Overview",
+  keywords: "Keywords",
+  explorer: "Queries",
+  pages: "Pages",
   cannibalization: "Cannibalization",
+};
+
+/** What each tab is for, shown under the tabs. */
+const TAB_HINTS: Record<GscTrackerTab, string> = {
+  overview:
+    "Your summaries in one place. Customize which ones you see and in what order.",
+  keywords:
+    "Phrases you follow day by day, each on the URL that should rank for it.",
+  explorer:
+    "Every query Search Console reports, against the previous period. Add any of them to Keywords.",
+  pages:
+    "Every page, and your page groups: a sitemap, a directory, a regex or your own list.",
+  cannibalization: "Queries split between two or more of your pages.",
 };
 
 /** One tracked site: its status, then the report tabs. */
@@ -187,6 +200,7 @@ function TrackerReport({
           />
         )}
       </div>
+      <p className="-mt-2 text-xs text-muted-foreground">{TAB_HINTS[tab]}</p>
       {tab === "keywords" ? null : <HistoryNotice {...history} days={days} />}
       {tab === "keywords" ? (
         <KeywordsTab projectId={projectId} canManage={canManage} />

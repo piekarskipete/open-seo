@@ -3,11 +3,13 @@ export const GSC_TRACKER_RANGE_DAYS = [7, 28, 90, 180, 365, 480] as const;
 
 export type GscTrackerRangeDays = (typeof GSC_TRACKER_RANGE_DAYS)[number];
 
+/** The site page's tabs, in the order a visit runs: the summary, the
+ *  phrases you follow, then exploring queries and pages, then problems. */
 export const GSC_TRACKER_TABS = [
+  "overview",
   "keywords",
   "explorer",
   "pages",
-  "overview",
   "cannibalization",
 ] as const;
 
@@ -19,7 +21,7 @@ export const GSC_TRACKER_POSITION_FORMATS = ["decimal", "whole"] as const;
 export type GscTrackerPositionFormat =
   (typeof GSC_TRACKER_POSITION_FORMATS)[number];
 
-/** Columns Query Explorer sorts by, and a project's default order. */
+/** Columns the Queries tab sorts by, and a project's default order. */
 export const GSC_TRACKER_SORT_KEYS = [
   "clicks",
   "impressions",
