@@ -84,7 +84,7 @@ async function checkRule(
         date: candidate.date,
         title: candidate.title,
         message: candidate.message,
-        data: JSON.stringify(candidate.data),
+        data: JSON.stringify({ ...candidate.data, line: candidate.line }),
       })
     )
       added += 1;

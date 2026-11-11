@@ -17,6 +17,8 @@ export type AlertCandidate = {
   date: string;
   title: string;
   message: string;
+  /** One short line for the summary message, with the URL it is about. */
+  line: string;
   data: Record<string, unknown>;
 };
 
@@ -146,6 +148,7 @@ async function phraseDropped(
         subject: phrase.id,
         date: point.latest.date,
         title: `“${phrase.query}” dropped ${round1(drop)} places`,
+        line: `${phrase.query}: ${round1(point.baseline)} → ${round1(point.latest.position)} (−${round1(drop)}) · ${phrase.targetUrl}`,
         message: `Position ${round1(point.latest.position)} on ${point.latest.date}, against ${round1(point.baseline)} on average the 7 days before. Target: ${phrase.targetUrl}`,
         data: phraseData(phrase, {
           position: round1(point.latest.position),
@@ -172,6 +175,7 @@ async function phraseEnteredTop(
         subject: phrase.id,
         date: point.latest.date,
         title: `“${phrase.query}” reached the top ${top}`,
+        line: `${phrase.query}: ${round1(point.baseline)} → ${round1(point.latest.position)} · ${phrase.targetUrl}`,
         message: `Position ${round1(point.latest.position)} on ${point.latest.date}, up from ${round1(point.baseline)} on average the 7 days before. Target: ${phrase.targetUrl}`,
         data: phraseData(phrase, {
           position: round1(point.latest.position),
@@ -208,6 +212,7 @@ async function phraseOutranked(
         subject: phrase.id,
         date: evalDate,
         title: `Another page beat the target for “${phrase.query}”`,
+        line: `${phrase.query}: another page beat ${phrase.targetUrl} ${days} days in a row`,
         message: `For ${days} day(s) up to ${evalDate}, another page of yours got more clicks or impressions for this phrase than its target ${phrase.targetUrl}.`,
         data: phraseData(phrase, { days }),
       },
@@ -253,6 +258,7 @@ async function rankMismatch(
         // Once a month per phrase.
         date: month,
         title: `Rank Tracking disagrees on “${phrase.query}”`,
+        line: `${phrase.query}: ${matched}% of ${summary.compared} days match · ${phrase.targetUrl}`,
         message: `Only ${matched}% of ${summary.compared} days this month are within 10 places of Search Console (${comparison.link?.domain}, ${comparison.link?.device}).`,
         data: phraseData(phrase, {
           matchPercent: matched,
@@ -302,6 +308,7 @@ async function checkpointReached(
       date,
       title: `Checkpoint ${date} reached (${lines.length} phrase${lines.length === 1 ? "" : "s"})`,
       message: `Start → checkpoint: ${text}`,
+      line: `${date}: ${text}`,
       data: { checkpoint: date, phrases: lines },
     };
   });

@@ -84,15 +84,15 @@ beforeAll(async () => {
     await import("../repositories/GscTrackerRepository"));
 
   // The newest stored day is Nov 10, so rules look at the settled Nov 8.
-  // "shoes" drops from 3 to 12 that day, "boots" climbs from 15 to 6, and
-  // the site's clicks halve week over week.
+  // "shoes" drops from 3 to 15 that day, "boots" climbs from 15 to 2, and
+  // the site's clicks fall from 350 to 140 week over week.
   const days: string[] = [];
   for (let day = 1; day <= 8; day++) days.push(`2026-11-0${day}`);
   const keywordDays = days.flatMap((date) => {
     const last = date === "2026-11-08";
     return [
-      `('k1', '${date}', 1, 1, 20, ${last ? 12 : 3})`,
-      `('k2', '${date}', 2, 1, 20, ${last ? 6 : 15})`,
+      `('k1', '${date}', 1, 1, 20, ${last ? 15 : 3})`,
+      `('k2', '${date}', 2, 1, 20, ${last ? 2 : 15})`,
     ];
   });
   const totals: string[] = [];
@@ -100,7 +100,7 @@ beforeAll(async () => {
     const date = new Date(Date.UTC(2026, 10, 8 - back))
       .toISOString()
       .slice(0, 10);
-    totals.push(`('p1', 's1', '${date}', ${back < 7 ? 5 : 10}, 100, 4)`);
+    totals.push(`('p1', 's1', '${date}', ${back < 7 ? 20 : 50}, 100, 4)`);
   }
   await client.executeMultiple(`
     INSERT INTO gsc_tracker_sites
@@ -155,21 +155,44 @@ it("raises each alert once, signed, and retries a failed digest", async () => {
   expect(await alerts.addRecommended(site, webhookId)).toEqual({ added: 5 });
   expect(await alerts.addRecommended(site, webhookId)).toEqual({ added: 0 });
 
-  // Phrase drop, phrase in the top 10, site traffic drop, sync problem; no
-  // page groups, so no group alert.
+  // Phrase drop, phrase in the top 3, site traffic drop, sync problem (no
+  // page groups, so no group alert), sent as one summary.
   expect(await alerts.runSiteAlerts("s1", { now })).toBe(4);
-  const titles = posts.map(
-    (post) =>
-      (JSON.parse(post.body) as { alerts: { title: string }[] }).alerts[0]
-        ?.title,
-  );
-  expect(titles).toEqual(
-    expect.arrayContaining([
-      "“shoes” dropped 9 places",
-      "“boots” reached the top 10",
-      "sc-domain:example.com lost 50% of its clicks",
-      "sc-domain:example.com: Search Console sync failed",
-    ]),
+  expect(posts).toHaveLength(1);
+  const summary = JSON.parse(posts[0]?.body ?? "{}") as {
+    event: string;
+    summary: string;
+    sections: { label: string; lines: string[] }[];
+  };
+  expect(summary.event).toBe("gsc_tracker.summary");
+  expect(summary.sections).toEqual([
+    {
+      type: "phrase_dropped",
+      label: "Phrase dropped",
+      count: 1,
+      lines: ["shoes: 3 → 15 (−12) · https://x/a"],
+    },
+    {
+      type: "phrase_entered_top",
+      label: "Phrase reached the top",
+      count: 1,
+      lines: ["boots: 15 → 2 · https://x/b"],
+    },
+    {
+      type: "site_traffic_drop",
+      label: "Site lost traffic",
+      count: 1,
+      lines: ["Whole site: 350 → 140 clicks (−60%)"],
+    },
+    {
+      type: "sync_error",
+      label: "Sync problem",
+      count: 1,
+      lines: ["Search Console: Search Console didn't answer."],
+    },
+  ]);
+  expect(summary.summary).toContain(
+    "GSC Tracker summary · sc-domain:example.com",
   );
   // Signed with the webhook's secret.
   const first = posts[0];
@@ -184,17 +207,18 @@ it("raises each alert once, signed, and retries a failed digest", async () => {
   expect(await alerts.runSiteAlerts("s1", { now })).toBe(0);
   expect(posts).toHaveLength(0);
 
-  // A digest that fails stays undelivered and goes again on the next run.
+  // A summary that fails stays undelivered and goes again on the next run,
+  // as a Discord message this time.
   await client.executeMultiple(`
     DELETE FROM gsc_tracker_alert_events;
-    UPDATE gsc_tracker_webhooks SET mode = 'digest';
+    UPDATE gsc_tracker_webhooks SET format = 'discord';
   `);
   answer = 500;
   expect(await alerts.runSiteAlerts("s1", { now, force: true })).toBe(4);
   expect(posts).toHaveLength(1);
-  expect(
-    (JSON.parse(posts[0]?.body ?? "{}") as { alerts: unknown[] }).alerts,
-  ).toHaveLength(4);
+  const discord = JSON.parse(posts[0]?.body ?? "{}") as { content: string };
+  expect(discord.content).toContain("**Phrase dropped (1)**");
+  expect(discord.content).toContain("• shoes: 3 → 15 (−12) · https://x/a");
   let state = await alerts.getAlerts(site);
   expect(state.history.every((event) => event.status === "failed")).toBe(true);
   expect(state.webhooks[0]).toMatchObject({
@@ -213,18 +237,18 @@ it("checks a rule's thresholds and scope", async () => {
   if (!site) throw new Error("no site");
   const [webhook] = (await alerts.getAlerts(site)).webhooks;
   if (!webhook) throw new Error("no webhook");
-  // A drop of 9 places doesn't reach a 10-place threshold.
+  // A drop of 12 places doesn't reach a 13-place threshold.
   const { id } = await alerts.saveRule(site, {
     type: "phrase_dropped",
     webhookId: webhook.id,
-    params: { places: 10, groupId: "ignored for phrase rules" },
+    params: { places: 13, groupId: "ignored for phrase rules" },
     active: true,
     cooldownDays: 3,
   });
   const rule = (await alerts.getAlerts(site)).rules.find(
     (item) => item.id === id,
   );
-  expect(rule?.params).toEqual({ places: 10, minImpressions: 10 });
+  expect(rule?.params).toEqual({ places: 13, minImpressions: 50 });
   await client.execute(
     `DELETE FROM gsc_tracker_alert_rules WHERE id != '${id}'`,
   );
