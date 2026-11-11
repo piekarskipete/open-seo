@@ -9,7 +9,10 @@ import {
   CheckpointsButton,
   StartDateButton,
 } from "@/client/features/gsc-tracker/GscTrackerKeywordStats";
-import { RankDetail } from "@/client/features/gsc-tracker/GscTrackerRankCompare";
+import {
+  AddToRankButton,
+  RankDetail,
+} from "@/client/features/gsc-tracker/GscTrackerRankCompare";
 import {
   formatDayLabel,
   formatPosition,
@@ -181,6 +184,7 @@ export function KeywordDetail({
             ids={[keyword.id]}
             initial={keyword.checkpoints}
           />
+          <AddToRankButton keyword={keyword} />
           <Button
             variant="ghost"
             size="xs"
