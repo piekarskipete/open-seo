@@ -4,7 +4,6 @@ import {
   type GscTrackerWebhook,
 } from "../repositories/GscTrackerAlertRepository";
 import { describeError } from "@/server/lib/errors";
-import { propertyDomain } from "./gscTrackerGroupRules";
 import {
   GSC_TRACKER_ALERT_DEFINITIONS,
   GSC_TRACKER_ALERT_TYPES,
@@ -55,30 +54,12 @@ function sections(alerts: OutgoingAlert[]) {
   });
 }
 
-/** A chat line without link previews: URLs on the site become their path
- *  (/blog/post/), other URLs are wrapped in <…>, which chats don't preview. */
-function plainLinks(line: string, site: Pick<GscTrackerSite, "siteUrl">) {
-  const domain = propertyDomain(site.siteUrl);
-  return line.replace(/https?:\/\/[^\s<>]+/g, (url) => {
-    try {
-      const parsed = new URL(url);
-      const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
-      if (domain && (host === domain || host.endsWith(`.${domain}`)))
-        return `${parsed.pathname}${parsed.search}` || "/";
-    } catch {
-      // Not a URL after all: keep it as text.
-    }
-    return `<${url}>`;
-  });
-}
-
-/** The summary's text, with `bold` marking headings; `chat` drops links. */
+/** The summary's text, with `bold` marking headings. */
 function summaryText(
   site: Pick<GscTrackerSite, "siteUrl">,
   alerts: OutgoingAlert[],
   bold: (text: string) => string,
   limit: number,
-  chat = false,
 ): string {
   const days = alerts
     .map((alert) => alert.date)
@@ -91,15 +72,11 @@ function summaryText(
         ? ` · ${days[0]}`
         : ` · ${days[0]} – ${days[days.length - 1]}`;
   const text = [
-    bold(
-      `GSC Tracker summary · ${chat ? propertyDomain(site.siteUrl) : site.siteUrl}${span}`,
-    ),
+    bold(`GSC Tracker summary · ${site.siteUrl}${span}`),
     ...sections(alerts).flatMap((section) => [
       "",
       bold(`${section.label} (${section.count})`),
-      ...section.lines.map(
-        (line) => `• ${chat ? plainLinks(line, site) : line}`,
-      ),
+      ...section.lines.map((line) => `• ${line}`),
     ]),
   ].join("\n");
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
@@ -112,9 +89,7 @@ function body(
 ): string {
   if (webhook.format === "slack")
     return JSON.stringify({
-      text: summaryText(site, alerts, (text) => `*${text}*`, SLACK_LIMIT, true),
-      unfurl_links: false,
-      unfurl_media: false,
+      text: summaryText(site, alerts, (text) => `*${text}*`, SLACK_LIMIT),
     });
   if (webhook.format === "discord")
     return JSON.stringify({
@@ -123,11 +98,7 @@ function body(
         alerts,
         (text) => `**${text}**`,
         DISCORD_LIMIT,
-        true,
       ),
-      // SUPPRESS_EMBEDS: no link previews under the message.
-      flags: 4,
-      allowed_mentions: { parse: [] },
     });
   return JSON.stringify({
     event: "gsc_tracker.summary",
@@ -221,16 +192,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 /** Sends the site's undelivered alerts (failed ones again, up to a few
  *  attempts) to their webhooks. */
-/**
- * Sends the site's undelivered alerts to their webhooks as one summary a day
- * each: a webhook that already got today's summary waits for tomorrow,
- * unless `force` (Check now) or a summary is being sent again after failing.
- */
-export async function deliverPending(
-  site: GscTrackerSite,
-  options: { now?: Date; force?: boolean } = {},
-): Promise<void> {
-  const today = (options.now ?? new Date()).toISOString().slice(0, 10);
+export async function deliverPending(site: GscTrackerSite): Promise<void> {
   const pending = await GscTrackerAlertRepository.undelivered(site.id);
   if (pending.length === 0) return;
   const webhooks = new Map(
@@ -248,14 +210,6 @@ export async function deliverPending(
   for (const [webhookId, items] of byWebhook) {
     const webhook = webhooks.get(webhookId);
     if (!webhook) continue;
-    // A failed summary goes again right away; tests don't count.
-    const retrying = items.some(({ event }) => event.status === "failed");
-    if (
-      !options.force &&
-      !retrying &&
-      (await GscTrackerAlertRepository.summarySentOn(webhook.id, today))
-    )
-      continue;
     // One summary per check; a very long one goes in a few parts.
     const batches = chunk(items, PER_POST);
     for (const batch of batches) {

@@ -131,7 +131,7 @@ async function runSiteAlerts(
       });
     }
   }
-  await deliverPending(site, { now, force: options.force });
+  await deliverPending(site);
   return added;
 }
 
@@ -211,7 +211,7 @@ async function testWebhook(site: GscTrackerSite, id: string) {
     {
       type: "test",
       title: "Test alert from GSC Tracker",
-      message: "Summaries of new alerts will arrive here.",
+      message: `Alerts for ${site.siteUrl} will arrive here.`,
       date: today,
       subject: "test",
       data: { test: true },
