@@ -1,17 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Crosshair } from "lucide-react";
 import { cn } from "cn";
 import { toast } from "sonner";
-import { SegmentedToggle } from "@/client/components/SegmentedToggle";
 import { Badge } from "@/client/components/ui/badge";
 import { Button } from "@/client/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/client/components/ui/select";
 import { TableBulkActionButton } from "@/client/components/table/TableBulkActionBar";
 import {
   AGREEMENT_STYLES,
@@ -26,10 +18,6 @@ import {
   useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
-import {
-  getGscTrackerRankComparison,
-  saveGscTrackerRankLink,
-} from "@/serverFunctions/gscTrackerOverview";
 import { addTrackingKeywords } from "@/serverFunctions/rank-tracking";
 import { comparableUrl } from "@/shared/gsc-tracker";
 import type { getGscTrackerKeywords } from "@/serverFunctions/gscTracker";
@@ -87,7 +75,9 @@ export function RankBadge({ keyword }: { keyword: Keyword }) {
         variant="secondary"
         title="This phrase isn't in the linked Rank Tracking domain."
       >
-        Not in Rank Tracking
+        <span className="hidden min-[1800px]:inline">Not in Rank Tracking</span>
+        <span className="hidden 2xl:max-[1799px]:inline">Not in RT</span>
+        <span className="2xl:hidden">No RT</span>
       </Badge>
     );
   const summary = summarizeRank({
@@ -107,7 +97,10 @@ export function RankBadge({ keyword }: { keyword: Keyword }) {
         variant="secondary"
         title={`No day with both Search Console and Rank Tracking positions this month. Latest Rank Tracking check: ${latest}.`}
       >
-        Rank Tracking: no overlap yet
+        <span className="hidden min-[1800px]:inline">
+          Rank Tracking: no overlap yet
+        </span>
+        <span className="min-[1800px]:hidden">RT –</span>
       </Badge>
     );
   // Shares of the days both sources measured: within 10 places, or not.
@@ -118,9 +111,16 @@ export function RankBadge({ keyword }: { keyword: Keyword }) {
       variant={summary.verdict === "agrees" ? "info" : "warning"}
       title={`${summary.agreeing} of ${summary.compared} days within 10 places of Search Console. Latest Rank Tracking check: ${latest}${summary.otherUrl ? `, on ${summary.otherUrl}` : ""}.`}
     >
-      {summary.verdict === "agrees" ? "✓" : "!"} Rank Tracking: {matchShare}%
-      match
-      {differShare > 0 ? ` · ${differShare}% differ` : ""}
+      {summary.verdict === "agrees" ? "✓" : "!"}{" "}
+      <span className="hidden min-[1800px]:inline">
+        Rank Tracking: {matchShare}% match
+        {differShare > 0 ? ` · ${differShare}% differ` : ""}
+      </span>
+      <span className="hidden 2xl:max-[1799px]:inline">
+        RT {matchShare}%{differShare > 0 ? ` · ${differShare}% off` : ""}
+      </span>
+      <span className="hidden xl:inline 2xl:hidden">RT {matchShare}%</span>
+      <span className="xl:hidden">{matchShare}%</span>
     </Badge>
   );
 }
@@ -310,95 +310,5 @@ export function RankBulkButton({ keywords }: { keywords: Keyword[] }) {
     >
       Add to Rank Tracking
     </TableBulkActionButton>
-  );
-}
-
-const DEVICES = [
-  { value: "mobile" as const, label: "Mobile", icon: null },
-  { value: "desktop" as const, label: "Desktop", icon: null },
-];
-
-/** Settings: the Rank Tracking domain the phrases are compared with. */
-export function RankLinkSettings({ projectId }: { projectId: string }) {
-  const siteId = useSiteId();
-  const queryClient = useQueryClient();
-  const month = new Date().toISOString().slice(0, 7);
-  const comparison = useQuery({
-    queryKey: ["gscTrackerRank", siteId, month],
-    queryFn: () =>
-      getGscTrackerRankComparison({ data: { projectId, siteId, month } }),
-  });
-  const save = useMutation({
-    meta: { errorToast: false },
-    mutationFn: (link: {
-      configId: string | null;
-      device?: "mobile" | "desktop";
-    }) => saveGscTrackerRankLink({ data: { projectId, siteId, ...link } }),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ["gscTrackerRank", siteId],
-      }),
-    onError: (error) =>
-      toast.error(getStandardErrorMessage(error, "Couldn't save the link")),
-  });
-  const data = comparison.data;
-  const items = [
-    { value: "none", label: "Not linked" },
-    ...(data?.configs ?? []).map((config) => ({
-      value: config.id,
-      label: `${config.domain}${config.locationName ? ` · ${config.locationName}` : ""} · ${config.languageCode}${config.id === data?.suggested ? " (matches)" : ""}`,
-    })),
-  ];
-  return (
-    <div className="space-y-1">
-      <div className="text-sm">Compare with Rank Tracking</div>
-      {data && data.configs.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          This project has no Rank Tracking domain yet. Add one in Rank Tracking
-          to compare its positions here.
-        </p>
-      ) : (
-        <>
-          <Select
-            items={items}
-            value={data?.link?.configId ?? "none"}
-            onValueChange={(value: string | null) =>
-              save.mutate({
-                configId: !value || value === "none" ? null : value,
-              })
-            }
-          >
-            <SelectTrigger
-              size="sm"
-              className="w-full"
-              aria-label="Rank Tracking domain"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {items.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {data?.link?.devices === "both" ? (
-            <SegmentedToggle
-              showLabels
-              value={data.link.device}
-              onChange={(device) =>
-                save.mutate({ configId: data.link?.configId ?? null, device })
-              }
-              items={DEVICES}
-            />
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            Followed phrases show the domain&apos;s Rank Tracking position under
-            Search Console&apos;s, marked by how well they agree.
-          </p>
-        </>
-      )}
-    </div>
   );
 }

@@ -102,43 +102,63 @@ export function KeywordRow({
       ) : null}
       <span className="flex min-w-0 flex-1 items-start gap-1.5">
         <span className="min-w-0">
-          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          {/* Wide screens: name, Chart and status badges on one line.
+              Narrower: the name gets its own line and Chart keeps the
+              (shortened) badges beside it. */}
+          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 2xl:flex-nowrap">
             <button
               type="button"
               onClick={onToggle}
               aria-expanded={open}
-              className="inline-flex items-start gap-1.5 text-left font-medium"
+              title={keyword.query}
+              className="inline-flex max-w-full min-w-0 basis-full items-center gap-1.5 text-left font-medium 2xl:basis-auto"
             >
               {open ? (
-                <ChevronDown className="mt-0.5 size-3.5 shrink-0" />
+                <ChevronDown className="size-3.5 shrink-0" />
               ) : (
-                <ChevronRight className="mt-0.5 size-3.5 shrink-0" />
+                <ChevronRight className="size-3.5 shrink-0" />
               )}
-              {keyword.query}
+              <span className="truncate">{keyword.query}</span>
             </button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="text-muted-foreground"
-              onClick={() => setCharting(true)}
-              aria-label={`Chart for ${keyword.query}`}
-            >
-              <ChartLine className="size-3.5" />
-              Chart
-            </Button>
-            {keyword.cannibalized ? (
-              <Badge
-                variant="warning"
-                title={`${keyword.competingPages} other page${keyword.competingPages === 1 ? "" : "s"} earned more clicks or impressions for this phrase this month`}
+            <span className="flex shrink-0 items-center gap-1 pl-4 whitespace-nowrap 2xl:pl-0">
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground"
+                onClick={() => setCharting(true)}
+                aria-label={`Chart for ${keyword.query}`}
+                title="Chart"
               >
-                Competing pages ({keyword.competingPages})
-              </Badge>
-            ) : null}
-            <RankBadge keyword={keyword} />
-            {tags.map((tag) => (
-              <TagChip key={tag.id} tag={tag} size="xs" />
-            ))}
+                <ChartLine className="size-3.5" />
+                <span className="hidden xl:inline">Chart</span>
+              </Button>
+              {keyword.cannibalized ? (
+                <Badge
+                  variant="warning"
+                  title={`${keyword.competingPages} other page${keyword.competingPages === 1 ? "" : "s"} earned more clicks or impressions for this phrase this month`}
+                >
+                  <span className="hidden min-[1800px]:inline">
+                    Competing pages ({keyword.competingPages})
+                  </span>
+                  <span className="hidden 2xl:max-[1799px]:inline">
+                    Competing ({keyword.competingPages})
+                  </span>
+                  <span className="hidden xl:inline 2xl:hidden">
+                    Comp. {keyword.competingPages}
+                  </span>
+                  <span className="xl:hidden">⚠ {keyword.competingPages}</span>
+                </Badge>
+              ) : null}
+              <RankBadge keyword={keyword} />
+            </span>
           </span>
+          {tags.length > 0 ? (
+            <span className="flex flex-wrap items-center gap-1 pt-0.5 pl-5">
+              {tags.map((tag) => (
+                <TagChip key={tag.id} tag={tag} size="xs" />
+              ))}
+            </span>
+          ) : null}
           <span className="block truncate pl-5 text-xs text-muted-foreground">
             {keyword.targetUrl}
           </span>
