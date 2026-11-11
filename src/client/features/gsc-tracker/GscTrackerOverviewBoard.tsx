@@ -314,7 +314,7 @@ function AddWidgetDialog({
             </p>
             {type === "group" && groups.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No page groups yet: create one on the Pages tab.
+                No page groups yet: create one on the Page Groups tab.
               </p>
             ) : (
               <div className="max-h-56 space-y-1 overflow-y-auto">

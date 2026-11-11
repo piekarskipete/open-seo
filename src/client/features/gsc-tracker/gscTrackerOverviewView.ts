@@ -8,7 +8,7 @@ import type {
   GscTrackerWidgetType,
 } from "@/shared/gsc-tracker";
 
-/** Opens a tracker tab, a page group on the Pages tab. */
+/** Opens a tracker tab, a page group on the Page Groups tab. */
 export type WidgetOpen = (tab: GscTrackerTab, group?: string) => void;
 
 /** Rows ordered by the change in clicks, biggest gain first. */
@@ -43,7 +43,7 @@ export const WIDGET_KINDS: {
   },
   {
     value: "queries",
-    label: "Queries",
+    label: "Query Explorer",
     description:
       "Queries with impressions, new, lost, improved and declined ones, and the biggest click gains.",
   },
@@ -58,6 +58,12 @@ export const WIDGET_KINDS: {
     label: "One page group",
     description:
       "A page group's totals against the previous period, and its pages gaining most.",
+  },
+  {
+    value: "checkpoints",
+    label: "Checkpoints",
+    description:
+      "Followed phrases grouped by their checkpoint days: average position at the start, at each checkpoint and now, and how many moved up or down.",
   },
   {
     value: "cannibalization",

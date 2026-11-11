@@ -49,8 +49,8 @@ type TrackerUpdate = {
 const TAB_LABELS: Record<GscTrackerTab, string> = {
   overview: "Overview",
   keywords: "Keywords",
-  explorer: "Queries",
-  pages: "Pages",
+  explorer: "Query Explorer",
+  pages: "Page Groups",
   cannibalization: "Cannibalization",
 };
 

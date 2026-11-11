@@ -25,6 +25,7 @@ import {
   useSiteId,
 } from "@/client/features/gsc-tracker/gscTrackerView";
 import { getGscTrackerOverview } from "@/serverFunctions/gscTracker";
+import { getGscTrackerCheckpoints } from "@/serverFunctions/gscTrackerOverview";
 import {
   getGscTrackerGroup,
   listGscTrackerPages,
@@ -148,6 +149,112 @@ export function GroupWidget({
             }))}
           />
         </>
+      )}
+    </Widget>
+  );
+}
+
+/** Followed phrases grouped by their checkpoint days, newest first. */
+export function CheckpointsWidget({
+  projectId,
+  onOpen,
+}: {
+  projectId: string;
+  onOpen: WidgetOpen;
+}) {
+  const siteId = useSiteId();
+  const formatMetric = useFormatMetric();
+  const summary = useQuery({
+    queryKey: ["gscTrackerCheckpoints", siteId],
+    queryFn: () => getGscTrackerCheckpoints({ data: { projectId, siteId } }),
+  });
+  const cohorts = summary.data?.cohorts ?? [];
+  return (
+    <Widget
+      title="Checkpoints"
+      onOpen={() => onOpen("keywords")}
+      loading={summary.isPending}
+    >
+      {cohorts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No phrase has a checkpoint yet. Set one on the Keywords tab to compare
+          where phrases stood then with their start and now.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {cohorts.slice(0, 4).map((cohort) => {
+            const steps = [
+              { label: "Start", value: cohort.average.start },
+              ...cohort.checkpoints.map((date, index) => ({
+                label: formatDay(date),
+                value: cohort.average.checkpoints[index] ?? null,
+              })),
+              { label: "Now", value: cohort.average.now },
+            ];
+            return (
+              <div key={cohort.checkpoints.join(" ")} className="space-y-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-sm font-medium">
+                    {cohort.checkpoints.map(formatDay).join(" → ")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {integer.format(cohort.phraseCount)} phrase
+                    {cohort.phraseCount === 1 ? "" : "s"} ·{" "}
+                    <span className="text-green-600 dark:text-green-500">
+                      {integer.format(cohort.improved)} up
+                    </span>{" "}
+                    ·{" "}
+                    <span className="text-destructive">
+                      {integer.format(cohort.declined)} down
+                    </span>
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
+                  {steps.map((step, index) => (
+                    <div key={step.label}>
+                      <p className="text-xs text-muted-foreground">
+                        {step.label}
+                      </p>
+                      <p className="font-semibold tabular-nums">
+                        {formatMetric("position", step.value)}{" "}
+                        {index > 0 ? (
+                          <Delta
+                            metric="position"
+                            current={step.value}
+                            previous={steps[index - 1]?.value ?? null}
+                          />
+                        ) : null}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <TopList
+                  title="Phrases, biggest gain by the last checkpoint first"
+                  empty="No phrase was measured at both ends yet."
+                  rows={cohort.phrases.slice(0, 4).map((phrase) => {
+                    const last =
+                      phrase.checkpoints[phrase.checkpoints.length - 1] ?? null;
+                    return {
+                      key: phrase.id,
+                      label: phrase.query,
+                      value: (
+                        <>
+                          {formatMetric("position", phrase.start)} →{" "}
+                          {formatMetric("position", last)}{" "}
+                          <Delta
+                            metric="position"
+                            current={last}
+                            previous={phrase.start}
+                          />
+                        </>
+                      ),
+                    };
+                  })}
+                />
+              </div>
+            );
+          })}
+        </div>
       )}
     </Widget>
   );

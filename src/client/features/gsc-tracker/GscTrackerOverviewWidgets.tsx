@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Delta } from "@/client/features/gsc-tracker/GscTrackerParts";
 import {
+  CheckpointsWidget,
   GroupWidget,
   TotalsWidget,
 } from "@/client/features/gsc-tracker/GscTrackerTotalsWidgets";
@@ -92,6 +93,8 @@ export function OverviewWidget({
           onOpen={onOpen}
         />
       ) : null;
+    case "checkpoints":
+      return <CheckpointsWidget projectId={projectId} onOpen={onOpen} />;
     case "cannibalization":
       return (
         <CannibalizationWidget
@@ -215,7 +218,7 @@ function QueriesWidget({
   );
   return (
     <Widget
-      title="Queries"
+      title="Query Explorer"
       onOpen={() => onOpen("explorer")}
       loading={list.isPending}
     >

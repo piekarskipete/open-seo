@@ -21,7 +21,7 @@ export const GSC_TRACKER_POSITION_FORMATS = ["decimal", "whole"] as const;
 export type GscTrackerPositionFormat =
   (typeof GSC_TRACKER_POSITION_FORMATS)[number];
 
-/** Columns the Queries tab sorts by, and a project's default order. */
+/** Columns Query Explorer sorts by, and a project's default order. */
 export const GSC_TRACKER_SORT_KEYS = [
   "clicks",
   "impressions",
@@ -95,6 +95,7 @@ export const GSC_TRACKER_WIDGET_TYPES = [
   "queries",
   "pages",
   "group",
+  "checkpoints",
   "cannibalization",
 ] as const;
 

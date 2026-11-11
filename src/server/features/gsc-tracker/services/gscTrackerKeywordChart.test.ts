@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import type { runBatch } from "@/db/runBatch";
 import type * as ChartModule from "./gscTrackerKeywordChart";
+import type * as CheckpointsModule from "./gscTrackerCheckpoints";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@/server/features/gsc/services/GscService", () => ({
@@ -23,6 +24,7 @@ vi.mock("@/server/lib/runtime-env", () => ({
 let client: Client;
 const directory = mkdtempSync(join(tmpdir(), "gsc-tracker-chart-"));
 let getKeywordChart: typeof ChartModule.getKeywordChart;
+let getCheckpointSummary: typeof CheckpointsModule.getCheckpointSummary;
 type Build = Parameters<typeof runBatch>[0];
 
 beforeAll(async () => {
@@ -63,6 +65,7 @@ beforeAll(async () => {
       readFileSync(file, "utf8").split("--> statement-breakpoint").join("\n"),
     );
   ({ getKeywordChart } = await import("./gscTrackerKeywordChart"));
+  ({ getCheckpointSummary } = await import("./gscTrackerCheckpoints"));
 });
 
 afterAll(() => {
@@ -150,6 +153,38 @@ it("measures progress since the start and between checkpoints", async () => {
     last: { date: "2026-11-05", position: 2 },
     change: 2,
   });
+});
+
+it("groups phrases by their checkpoints for the Overview", async () => {
+  expect((await getCheckpointSummary("p1")).cohorts).toEqual([]);
+  await client.executeMultiple(`
+    UPDATE gsc_tracker_keywords SET start_date = '2026-10-28',
+      checkpoint1_date = '2026-11-03';
+    INSERT INTO gsc_tracker_keywords
+      (id, project_id, site_id, query, target_url, start_date, checkpoint1_date)
+      VALUES ('k2', 'p1', 'p1', 'boots', 'https://x/b', '2026-10-28', '2026-11-03');
+    INSERT INTO gsc_tracker_keyword_days
+      (keyword_id, date, page_id, clicks, impressions, position) VALUES
+      ('k2', '2026-10-29', 2, 0, 10, 5),
+      ('k2', '2026-11-02', 2, 0, 10, 8);
+  `);
+  const { cohorts } = await getCheckpointSummary(
+    "p1",
+    new Date("2026-11-10T12:00:00Z"),
+  );
+  expect(cohorts).toHaveLength(1);
+  expect(cohorts[0]).toMatchObject({
+    checkpoints: ["2026-11-03"],
+    phraseCount: 2,
+    improved: 1,
+    declined: 1,
+    average: { start: 7, checkpoints: [6], now: 5 },
+  });
+  // The biggest gain by the checkpoint first: shoes 9 → 4, boots 5 → 8.
+  expect(cohorts[0]?.phrases.map((phrase) => phrase.query)).toEqual([
+    "shoes",
+    "boots",
+  ]);
 });
 
 it("charts a custom range against the same length before it", async () => {
