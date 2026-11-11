@@ -146,21 +146,23 @@ describe("rules", () => {
   });
 
   it("keeps sitemaps on the property's domain", () => {
-    expect(
-      rules.isOnProperty(
-        "sc-domain:example.com",
-        "https://shop.example.com/s.xml",
-      ),
-    ).toBe(true);
-    expect(
-      rules.isOnProperty(
-        "https://www.example.com/",
-        "https://example.com/s.xml",
-      ),
-    ).toBe(true);
-    expect(
-      rules.isOnProperty("https://example.com/", "https://evil.com/s.xml"),
-    ).toBe(false);
+    const on = (siteUrl: string, sitemapUrl: string) => {
+      try {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- only siteUrl is read
+        rules.requireSitemapUrl({ siteUrl } as never, sitemapUrl);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(on("sc-domain:example.com", "https://shop.example.com/s.xml")).toBe(
+      true,
+    );
+    expect(on("https://www.example.com/", "https://example.com/s.xml")).toBe(
+      true,
+    );
+    expect(on("https://example.com/", "https://evil.com/s.xml")).toBe(false);
+    expect(on("https://example.com/", "ftp://example.com/s.xml")).toBe(false);
   });
 });
 
@@ -267,6 +269,14 @@ describe("page groups", () => {
       }),
     ).rejects.toThrow("regular expression");
     await expect(
+      groups.createGroup({
+        site: current,
+        name: "Posts",
+        kind: "directory",
+        pattern: "https://example.com/post-sitemap.xml",
+      }),
+    ).rejects.toThrow("pick Sitemap");
+    await expect(
       groups.createGroup({ site: current, name: "blog", kind: "manual" }),
     ).rejects.toThrow("already exists");
   });
@@ -302,5 +312,24 @@ describe("page groups", () => {
       pattern: "/BLOG/[ab]/$",
     });
     expect((await groups.getGroup(current, id, 7)).urls).toBe(2);
+  });
+
+  it("lists a sitemap's URLs through the URL filter, with zeros for pages without data", async () => {
+    sitemap.urls = [
+      "https://example.com/blog/a", // Search Console spells it with a slash
+      "https://example.com/only-in-sitemap/",
+    ];
+    const list = await groups.getPages({
+      site: await site(),
+      days: 7,
+      filter: {
+        urlMode: "sitemap",
+        url: "https://example.com/post-sitemap.xml",
+      },
+    });
+    expect(list?.rows.map((row) => [row.key, row.current.clicks])).toEqual([
+      ["https://example.com/blog/a/", 14],
+      ["https://example.com/only-in-sitemap/", 0],
+    ]);
   });
 });

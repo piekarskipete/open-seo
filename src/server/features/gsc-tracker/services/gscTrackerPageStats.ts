@@ -21,7 +21,7 @@ import {
 import type { GscTrackerSite } from "../repositories/GscTrackerRepository";
 import { GscTrackerGroupRepository } from "../repositories/GscTrackerGroupRepository";
 import { addDays } from "./gscTrackerDates";
-import { compileGroupRegex } from "./gscTrackerGroupRules";
+import { compileGroupRegex, readSitemapUrls } from "./gscTrackerGroupRules";
 import { customPeriods, metrics } from "./gscTrackerWindows";
 import { AppError } from "@/server/lib/errors";
 import {
@@ -135,9 +135,17 @@ function queryFilter(siteId: string, range: Range, text: string): SQL | null {
   )`;
 }
 
+/** A test for a set of URLs, matched regardless of scheme, "www." or a
+ *  trailing slash. */
+function inList(urls: string[]): (url: string) => boolean {
+  const wanted = new Set(urls.map(comparableUrl));
+  return (url) => wanted.has(comparableUrl(url));
+}
+
 /** The URL filter as a test on a page URL; a "contains" filter runs in SQL. */
 function urlTest(filter: PageFilter): ((url: string) => boolean) | null {
   const text = filter.url?.trim();
+  if (filter.urlMode === "sitemap") return null;
   if (!text || filter.urlMode === "contains" || !filter.urlMode) return null;
   if (filter.urlMode === "regex") {
     const regex = compileGroupRegex(text);
@@ -208,20 +216,32 @@ export async function listPages(input: {
     .groupBy(gscTrackerPages.id, gscTrackerPages.url)
     .orderBy(desc(sql`sum(${gscTrackerPageDays.impressions})`));
 
-  const test = urlTest(filter);
+  // A sitemap filter keeps the pages it lists, and lists the ones Search
+  // Console has no data for with zeros, like a group's.
+  const sitemapUrls =
+    filter.urlMode === "sitemap" && filter.url?.trim()
+      ? await readSitemapUrls(input.site, filter.url.trim())
+      : null;
+  const test = sitemapUrls ? inList(sitemapUrls) : urlTest(filter);
   const keep = (url: string) =>
     (!test || test(url)) && (!contains || url.toLowerCase().includes(contains));
   const listed = rows
     .filter((row) => keep(row.url))
     .map((row) => ({ key: row.url, ...compare(row) }));
-  // A group's URLs without any data yet (fresh from a sitemap, say).
-  if (input.groupId && !byQuery) {
-    const seen = new Set(listed.map((row) => row.key));
-    for (const member of await GscTrackerGroupRepository.listMembers(
-      input.groupId,
-    ))
-      if (!member.excluded && !seen.has(member.url) && keep(member.url))
-        listed.push({ key: member.url, ...compare(undefined) });
+  // URLs without any data yet: a group's (fresh from a sitemap, say) and
+  // a sitemap filter's.
+  if (!byQuery && (input.groupId || sitemapUrls)) {
+    const seen = new Set(listed.map((row) => comparableUrl(row.key)));
+    const members = input.groupId
+      ? (await GscTrackerGroupRepository.listMembers(input.groupId))
+          .filter((member) => !member.excluded)
+          .map((member) => member.url)
+      : (sitemapUrls ?? []);
+    for (const url of members)
+      if (!seen.has(comparableUrl(url)) && keep(url)) {
+        seen.add(comparableUrl(url));
+        listed.push({ key: url, ...compare(undefined) });
+      }
   }
   return {
     ...range,

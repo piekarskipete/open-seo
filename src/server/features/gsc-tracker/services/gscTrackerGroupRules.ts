@@ -4,7 +4,7 @@ import {
   type GscTrackerUrlGroup,
 } from "../repositories/GscTrackerGroupRepository";
 import { collectSitemapUrls } from "@/server/lib/audit/discovery";
-import { describeError } from "@/server/lib/errors";
+import { AppError, describeError } from "@/server/lib/errors";
 import { comparableUrl } from "@/shared/gsc-tracker";
 
 // How a page group keeps its URLs: directory and regex groups take every
@@ -76,7 +76,7 @@ function propertyDomain(siteUrl: string): string {
 }
 
 /** Whether a URL is on the property's domain or one of its subdomains. */
-export function isOnProperty(siteUrl: string, url: string): boolean {
+function isOnProperty(siteUrl: string, url: string): boolean {
   const domain = propertyDomain(siteUrl);
   let host: string;
   try {
@@ -104,20 +104,64 @@ async function sitePagesByKey(siteId: string): Promise<Map<string, string>> {
   return pages;
 }
 
-/** Reads the group's sitemap and adds the URLs it doesn't hold yet, as the
- *  URL Search Console reports for the same page where it knows one. */
-async function refreshSitemap(site: GscTrackerSite, group: GscTrackerUrlGroup) {
-  if (!group.pattern) return;
-  const origin = new URL(group.pattern).origin;
+// A sitemap read for the page list's filter is kept this long, so changing
+// the period or another filter doesn't fetch it again.
+const SITEMAP_CACHE_MS = 10 * 60 * 1000;
+const sitemapCache = new Map<string, { at: number; urls: string[] }>();
+
+/** Checks a sitemap address: a full http(s) URL on the property's domain. */
+export function requireSitemapUrl(site: GscTrackerSite, value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new AppError("VALIDATION_ERROR", "Enter the sitemap's full URL.");
+  }
+  if (!/^https?:$/.test(url.protocol) || !isOnProperty(site.siteUrl, value))
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "The sitemap must be on this site's domain.",
+    );
+  return url.toString();
+}
+
+/**
+ * The page URLs a sitemap lists (indexes followed), each in the spelling
+ * Search Console reports for the same page where it knows one. `fresh`
+ * skips the short-lived cache.
+ */
+export async function readSitemapUrls(
+  site: GscTrackerSite,
+  sitemapUrl: string,
+  fresh = false,
+): Promise<string[]> {
+  const address = requireSitemapUrl(site, sitemapUrl);
+  const key = `${site.id} ${address}`;
+  const cached = sitemapCache.get(key);
+  if (!fresh && cached && Date.now() - cached.at < SITEMAP_CACHE_MS)
+    return cached.urls;
   const listed = await collectSitemapUrls({
-    sources: [group.pattern],
-    origin,
+    sources: [address],
+    origin: new URL(address).origin,
     maxUrls: SITEMAP_MAX_URLS,
   });
   if (listed.size === 0)
-    throw new Error("The sitemap couldn't be read or lists no URLs.");
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "The sitemap couldn't be read or lists no URLs.",
+    );
   const known = await sitePagesByKey(site.id);
-  const urls = [...listed].map((url) => known.get(comparableUrl(url)) ?? url);
+  const urls = [
+    ...new Set([...listed].map((url) => known.get(comparableUrl(url)) ?? url)),
+  ];
+  sitemapCache.set(key, { at: Date.now(), urls });
+  return urls;
+}
+
+/** Reads the group's sitemap and adds the URLs it doesn't hold yet. */
+async function refreshSitemap(site: GscTrackerSite, group: GscTrackerUrlGroup) {
+  if (!group.pattern) return;
+  const urls = await readSitemapUrls(site, group.pattern, true);
   await GscTrackerGroupRepository.addMembers(group.id, urls, "rule");
 }
 
@@ -191,7 +235,7 @@ export async function refreshGroup(
   } catch (error) {
     await GscTrackerGroupRepository.update(group.id, {
       lastError:
-        error instanceof Error && error.message.startsWith("The sitemap")
+        error instanceof AppError
           ? error.message
           : "The group couldn't be refreshed. The next sync tries again.",
       // A failed sitemap waits a day like a read one, not every tick.

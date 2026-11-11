@@ -6,7 +6,12 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { RowSelectionState } from "@tanstack/react-table";
-import { FolderPlus, FolderMinus, SlidersHorizontal } from "lucide-react";
+import {
+  FolderPlus,
+  FolderMinus,
+  RefreshCw,
+  SlidersHorizontal,
+} from "lucide-react";
 import { toast } from "sonner";
 import { QueryError } from "@/client/components/QueryState";
 import { SegmentedToggle } from "@/client/components/SegmentedToggle";
@@ -19,7 +24,10 @@ import {
   TableBulkActionButton,
 } from "@/client/components/table/TableBulkActionBar";
 import { CompareTable } from "@/client/features/gsc-tracker/GscTrackerCompareTable";
-import { AddToGroupDialog } from "@/client/features/gsc-tracker/GscTrackerGroupDialog";
+import {
+  AddToGroupDialog,
+  GroupFormDialog,
+} from "@/client/features/gsc-tracker/GscTrackerGroupDialog";
 import { PageFilterPanel } from "@/client/features/gsc-tracker/GscTrackerPageFilter";
 import {
   activeFilterCount,
@@ -27,6 +35,7 @@ import {
   EMPTY_PAGE_FILTER,
   PAGE_VIEWS,
   refreshGroups,
+  sitemapGroupName,
   type PageFilterValue,
   type PageView,
 } from "@/client/features/gsc-tracker/gscTrackerGroupsView";
@@ -55,6 +64,7 @@ export function PageTable({
   groups,
   canManage,
   onSelect,
+  onGroupCreated,
 }: {
   projectId: string;
   days: GscTrackerRangeDays;
@@ -64,6 +74,8 @@ export function PageTable({
   groups: { id: string; name: string }[];
   canManage: boolean;
   onSelect: (url: string) => void;
+  /** Opens a group saved from the page list's sitemap filter. */
+  onGroupCreated?: (groupId: string) => void;
 }) {
   const siteId = useSiteId();
   const queryClient = useQueryClient();
@@ -73,6 +85,9 @@ export function PageTable({
   const [sort, setSort] = useState<SortState | null>(null);
   const [selection, setSelection] = useState<RowSelectionState>({});
   const [adding, setAdding] = useState(false);
+  const [savingSitemap, setSavingSitemap] = useState(false);
+  const sitemap =
+    filter.urlMode === "sitemap" && filter.url ? filter.url : null;
   const pages = useQuery({
     queryKey: ["gscTrackerPages", siteId, groupId ?? null, days, filter],
     queryFn: () =>
@@ -149,6 +164,24 @@ export function PageTable({
       {showFilters ? (
         <PageFilterPanel value={filter} onApply={setFilter} />
       ) : null}
+      {sitemap ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
+          <p className="min-w-0 text-xs break-all text-muted-foreground">
+            Every URL listed in {sitemap}, those without Search Console data
+            too.
+          </p>
+          {canManage && !groupId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSavingSitemap(true)}
+            >
+              <RefreshCw data-icon="inline-start" />
+              Save as synced group
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {pages.isPending ? (
         <div className="p-4">
           <Skeleton className="h-80 w-full" />
@@ -203,6 +236,21 @@ export function PageTable({
               ) : null}
             </div>
           }
+        />
+      ) : null}
+      {savingSitemap && sitemap ? (
+        <GroupFormDialog
+          projectId={projectId}
+          initial={{
+            name: sitemapGroupName(sitemap),
+            kind: "sitemap",
+            pattern: sitemap,
+          }}
+          onSaved={(id) => {
+            setSavingSitemap(false);
+            onGroupCreated?.(id);
+          }}
+          onClose={() => setSavingSitemap(false)}
         />
       ) : null}
       {adding ? (
