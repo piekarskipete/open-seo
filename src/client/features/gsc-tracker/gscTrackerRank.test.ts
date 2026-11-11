@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareDay, summarizeRank } from "./gscTrackerRank";
+import { compareDay, summarizeRank } from "@/shared/gsc-tracker-rank";
 
 describe("compareDay", () => {
   it("rates how close Rank Tracking is to Search Console's average", () => {

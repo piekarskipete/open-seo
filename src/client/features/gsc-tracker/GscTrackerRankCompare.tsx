@@ -8,10 +8,9 @@ import { TableBulkActionButton } from "@/client/components/table/TableBulkAction
 import {
   AGREEMENT_STYLES,
   placesApart,
-  compareDay,
-  summarizeRank,
   useRank,
 } from "@/client/features/gsc-tracker/gscTrackerRank";
+import { compareDay, summarizeRank } from "@/shared/gsc-tracker-rank";
 import {
   formatDayLabel,
   useDateFormat,

@@ -14,6 +14,7 @@ import {
   gscTrackerUrlGroups,
 } from "@/db/schema";
 import { GscTrackerTagRepository } from "./GscTrackerTagRepository";
+import { GscTrackerAlertRepository } from "./GscTrackerAlertRepository";
 
 export type GscTrackerSite = typeof gscTrackerSites.$inferSelect;
 
@@ -178,6 +179,7 @@ async function clearHistory(siteId: string): Promise<void> {
 async function remove(siteId: string): Promise<void> {
   await clearHistory(siteId);
   await GscTrackerTagRepository.clearSite(siteId);
+  await GscTrackerAlertRepository.clearSite(siteId);
   const siteGroups = db
     .select({ id: gscTrackerUrlGroups.id })
     .from(gscTrackerUrlGroups)
