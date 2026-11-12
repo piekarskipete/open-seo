@@ -13,6 +13,26 @@ This is a fork of [every-app/open-seo](https://github.com/every-app/open-seo) th
 | `feature/gsc-service-account` | `main`                | **Service account keys**: connect Search Console by uploading a Google service account JSON key instead of signing in with Google                                                                                                                                                                                                                                                                                                                                                           | One module, ready for an upstream pull request. Migrations: SQLite `0069`, Postgres `0047`.                                                                     |
 | `combined`                    | `feature/gsc-tracker` | **Both modules**: everything in `feature/gsc-tracker` plus everything in `feature/gsc-service-account`                                                                                                                                                                                                                                                                                                                                                                                      | The working branch: run, test and deploy this one. With a service account connected, GSC Tracker syncs through the key, with no Google sign-in that can expire. |
 
+### Screenshots
+
+GSC Tracker with demo data (`example.com`).
+
+**Overview**: a board of summaries you arrange yourself (site totals, followed phrases, queries, checkpoints, page groups, competing pages).
+
+![GSC Tracker Overview](docs/fork/overview.png)
+
+**Keywords**: phrases followed day by day on the URL that should rank, with tags, start dates and checkpoints, and Rank Tracking's position for the same day underneath.
+
+![GSC Tracker Keywords](docs/fork/keywords.png)
+
+**Page Groups**: pages grouped by a directory, a regex, a sitemap or your own list, with group totals for any period.
+
+![GSC Tracker Page Groups](docs/fork/page-groups.png)
+
+A page opens with its daily numbers and every query it earned.
+
+![GSC Tracker page detail](docs/fork/page-detail.png)
+
 ### How the branches work together
 
 - New work starts on `combined`. Once a change is finished, it is copied to the module branch it belongs to, so each module branch stays a clean, self-contained proposal.
