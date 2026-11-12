@@ -33,6 +33,10 @@ A page opens with its daily numbers and every query it earned.
 
 ![GSC Tracker page detail](docs/fork/page-detail.png)
 
+**Cannibalization**: queries split between your pages, searchable by query and URL, with URL exclusions such as `?fbclid=`.
+
+![GSC Tracker Cannibalization](docs/fork/cannibalization.png)
+
 ### How the branches work together
 
 - New work starts on `combined`. Once a change is finished, it is copied to the module branch it belongs to, so each module branch stays a clean, self-contained proposal.
